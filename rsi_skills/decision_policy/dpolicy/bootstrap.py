@@ -13,7 +13,11 @@ def _index(strata, rng):
 
 def paired_diff(y, d_new, d_old, obj: dict, costs: dict | None = None, *, steps=None,
                 reps: int = 1000, seed: int = 20261121, level: float = 0.95) -> dict:
+    """d_new / d_old: decisions (1/0/-1). For an ``*_e2e`` metric pass end-to-end decisions (metrics.resolve):
+    the metric is then computed as its base name on them."""
     y, d_new, d_old = (np.asarray(a) for a in (y, d_new, d_old))
+    if obj.get("metric", "f1_e2e").endswith("_e2e"):
+        obj = {**obj, "metric": obj["metric"][: -len("_e2e")]}
     point = objective(from_counts(counts(y, d_new), costs), obj) - objective(from_counts(counts(y, d_old), costs), obj)
     if reps <= 0 or not np.isfinite(point):
         return {"diff": point, "lo": None, "hi": None, "p_better": None, "reps": 0}

@@ -95,6 +95,10 @@ class Fitted:
                 stage[rows] = "first"
         out = df[[c for c in ("id", "y", "p", "step", "post43") if c in df.columns]].copy()
         out["p_cal"], out["decision"], out["stage"], out["threshold"] = pc, d, stage, t
+        # what the first stage alone (threshold, no abstain band) would decide: the fallback for deferred rows
+        # and the reference for "are the deferred rows the bad ones?"
+        out["decision_first"] = (pc >= t).astype(int)
+        out["deferred"] = (stage == "defer") | (stage == "second")
         return out
 
     def describe(self) -> dict:

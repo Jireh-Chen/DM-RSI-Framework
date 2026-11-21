@@ -10,7 +10,7 @@
 cd rsi_skills/decision_policy
 python -m venv .venv && . .venv/bin/activate      # 也可以用 uv / conda；只需要 CPU
 pip install -e '.[dev]'
-pytest -q                                          # 15 个测试，约 3 秒
+pytest -q                                          # 18 个测试，约 3 秒
 ```
 
 ## 5 分钟跑通（合成数据）
@@ -19,11 +19,24 @@ pytest -q                                          # 15 个测试，约 3 秒
 python -m dpolicy.synthetic --out runs/demo_scores                 # 生成 Elliptic 形状的假分数（仅供演示）
 python -m dpolicy check  configs/demo_synthetic.yaml               # 看 fit/select 划分
 python -m dpolicy init   configs/demo_synthetic.yaml               # 评估基线，写 diagnosis.md
-mkdir -p runs/demo_synthetic/proposals && cp configs/policies/example_*.yaml runs/demo_synthetic/proposals/
+mkdir -p runs/demo_synthetic/proposals && cp configs/policies/example_*.yaml configs/policies/demo_*.yaml runs/demo_synthetic/proposals/
 python -m dpolicy evolve configs/demo_synthetic.yaml               # 提出、比较、接受，共 3 轮
 cat runs/demo_synthetic/report.md
 python -m dpolicy final-test configs/demo_synthetic.yaml --allow-test   # 只跑一次
 ```
+
+在合成数据上，`demo_abstain30_logreg_f1` 的效果是：拒判阈值附近 30% 的行，被接受行的 F1 从 0.73 升到 1.00；被拒判的行交给看得到额外特征的 logreg 二次判断，整体 F1（`f1_e2e`）从 0.732 升到 0.804，配对 CI 为 [+0.026, +0.118]。合成数据只用来演示机制，不代表真实效果。
+
+## 指标：判断用什么、最终报什么
+
+- **最终评估一律用 F1（`final_metric: f1_e2e`）**：在全部行上计算，和团队口径一致。被拒判的行由二次判断给出决策，没有二次判断时回退到一阶段阈值的决策。
+- **RSI 过程中可以换判断指标（`objective.metric`）**：任何指标键都能用，例如 `f1`（只在接受的行上算，配合 `min_coverage`）、`cost_e2e`、`recall_e2e`、`auprc`。
+- **拒判的价值单独记录**，每次评估和 `final-test` 都会写进 archive 和报告：
+  - `f1_accepted`：被接受的行的 F1；
+  - `first_err_rate_deferred` 和 `first_err_rate_accepted`：一阶段在被拒判、被接受两部分上的错误率，用来判断拒判的是不是难例；
+  - `share_of_first_errors_deferred`：一阶段的错误里有多少被拒判拦下；
+  - `f1_deferred_first` 和 `f1_deferred_final`：被拒判的行由一阶段判、由二次判断判各自的 F1。
+- 另外每次都会报告 precision、recall、coverage、cost、AUPRC、AUROC、Brier、ECE，Elliptic 还会分 pre43 和 post43。
 
 ## 在真实模型上用
 
@@ -52,7 +65,7 @@ incumbent.yaml         当前最优策略；baseline.yaml 是起点
 eval/<hash>/           policy.yaml、decisions_select.parquet、diagnosis.{md,json}
 proposals/             agent 或人写的候选 YAML
 report.md              汇总
-final_test.json        test 结果（含 pre43/post43）；final_test_<policy>.parquet
+final_test.{json,md}   test 结果：f1_e2e 为主，全部指标，pre43/post43；final_test_<policy>.parquet
 ```
 
 ## 代码

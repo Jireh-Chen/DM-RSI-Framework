@@ -21,6 +21,10 @@
 
 ## 指标
 
-- 决策指标：precision、recall、F1（都在覆盖行上算）、`recall_all`（被拒判的正例算漏）、coverage、cost = (c_fp·FP + c_fn·FN + c_defer·defer)/n。
+- **最终指标 `f1_e2e`**：全部行上的 F1。被拒判的行用二次判断的决策，没有二次判断时用一阶段阈值的决策。`final-test` 以它为主，并给出相对 baseline 的配对 CI。
+- 一阶段指标（`*_first`）：只用阈值，不考虑拒判。
+- 选择性指标：precision、recall、F1（只在策略自己给出决策的行上算）、coverage、`recall_all`（被拒判的正例算漏）。
+- 拒判质量：`deferred_share`、`f1_accepted`、`first_err_rate_deferred` 和 `first_err_rate_accepted`、`share_of_first_errors_deferred`、`f1_deferred_first` 和 `f1_deferred_final`。
+- 代价：cost = (c_fp·FP + c_fn·FN + c_defer·defer)/n；`cost_e2e` 先把被拒判的行补成最终决策，再按同样公式计算。
 - 分数指标（在 p_cal 上算）：AUPRC、AUROC、Brier、ECE（15 个等宽 bin，和 `eval_decisions.py` 一致）。
 - Elliptic 的子集：pre43 / post43（需要 `post43` 列）。

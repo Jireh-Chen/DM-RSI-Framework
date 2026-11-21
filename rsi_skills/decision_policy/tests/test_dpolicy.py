@@ -165,3 +165,44 @@ def test_cli_end_to_end(tmp_path, scores):
     assert main(["final-test", str(cfg), "--allow-test"]) == 0
     with pytest.raises(RuntimeError):
         main(["final-test", str(cfg), "--allow-test"])  # test used once only
+
+
+def test_e2e_and_defer_quality():
+    from dpolicy.metrics import all_metrics, resolve
+    y = np.array([1, 0, 1, 0, 1, 0])
+    first = np.array([1, 0, 0, 1, 1, 0])          # errors on rows 2, 3
+    final = np.array([1, 0, -1, -1, 1, 0])          # rows 2, 3 deferred, not re-decided
+    assert (resolve(final, first) == first).all()
+    m = all_metrics(y, final, np.full(6, .5), None, first, final < 0)
+    assert m["f1"] == 1.0 and m["coverage"] == pytest.approx(4 / 6)
+    assert m["f1_e2e"] == m["f1_first"]              # abstain alone does not change end-to-end F1
+    assert m["first_err_rate_deferred"] == 1.0 and m["first_err_rate_accepted"] == 0.0
+    assert m["share_of_first_errors_deferred"] == 1.0 and m["f1_accepted"] == 1.0
+    fixed = np.array([1, 0, 1, 0, 1, 0])            # a second stage that fixes both
+    m2 = all_metrics(y, fixed, np.full(6, .5), None, first, final < 0)
+    assert m2["f1_e2e"] == 1.0 and m2["f1_deferred_final"] == 1.0 and m2["f1_deferred_first"] == 0.0
+
+
+def test_star_mutation_reaches_abstain_plus_second_stage():
+    import random
+    from dpolicy.evolve import DEFAULT_SPACE, mutate
+    rng = random.Random(0)
+    got = [mutate({"name": "b"}, {"*": DEFAULT_SPACE["*"]}, rng) for _ in range(5)]
+    assert all(g["second_stage"]["enabled"] and g["abstain"]["coverage"] < 1 for g in got)
+
+
+def test_final_test_reports_f1_e2e(tmp_path, scores):
+    pol = tmp_path / "base.yaml"
+    pol.write_text(yaml.safe_dump({"name": "base"}))
+    cfg = tmp_path / "run.yaml"
+    cfg.write_text(yaml.safe_dump({
+        "run_name": "t", "out_dir": str(tmp_path / "out"),
+        "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True},
+        "bootstrap": {"reps": 30}, "baseline": str(pol), "evolve": {"iterations": 1, "auto_candidates": 2}}))
+    main(["init", str(cfg)])
+    main(["evolve", str(cfg)])
+    main(["final-test", str(cfg), "--allow-test"])
+    out = json.loads((tmp_path / "out/final_test.json").read_text())
+    assert out["policies"]["baseline"]["final_metric"]["name"] == "f1_e2e"
+    assert "final_metric" in out["policies"]["incumbent"]["vs_baseline"]
+    assert "f1_e2e" in (tmp_path / "out/final_test.md").read_text()

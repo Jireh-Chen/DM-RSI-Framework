@@ -15,12 +15,11 @@ data:
 protocol:
   by: step                       # val = steps 30-34; fit on 30-32, compare candidates on 33-34 (later period)
   select_frac: 0.4
-objective:
-  metric: f1                     # same headline metric as eval_decisions.py (computed on covered rows)
-  min_coverage: 1.0              # no abstention: F1 on covered rows would reward deferring the hard rows.
-  # To evolve abstention / second-stage review, compare on cost instead (deferrals are charged costs.defer):
-  # metric: cost
-  # min_coverage: 0.9
+objective:                       # what RSI compares candidates on (select rows); any key of the metrics, e.g.
+  metric: f1_e2e                 #   f1_e2e   F1 on all rows; deferred rows decided by the second stage (or the threshold)
+  min_coverage: 0.0              #   f1       F1 on the rows the policy accepts (selective), with min_coverage, e.g. 0.8
+                                 #   cost_e2e / recall_e2e / precision_e2e / auprc ...
+final_metric: f1_e2e             # headline of final-test = team F1 on all test rows (all other metrics are reported too)
 costs: {fp: 1.0, fn: 10.0, defer: 0.5}   # used by rule: cost and by the reported cost metric; agree on these with the team
 bootstrap: {reps: 1000, seed: 20261121, level: 0.95}   # stratified by step
 accept: {min_lo: 0.0}            # new incumbent only if the paired CI lower bound of the gain > 0

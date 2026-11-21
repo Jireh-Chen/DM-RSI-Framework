@@ -29,12 +29,8 @@ p ──► 校准（none | platt | temperature | isotonic）
 
 ## 主流程
 
-1. **定目标（问用户，一次问完）。** 下游任务看重什么，就用什么指标：
-   - `objective.metric`：`f1`（团队默认，和 `eval_decisions.py` 一致）、`cost`、`recall_all`、`precision`。
-   - `costs`：fp、fn、defer 各算多少代价。
-   - `min_coverage`：最多允许拒判多少行。
-   - **注意**：在覆盖行上算 F1 会奖励拒判。要进化拒判或二次判断，就用 `cost`（defer 有代价），或者把 `min_coverage` 设高。
-   - 目标和代价一旦定下，整个 run 都不改。要改就开一个新 `run_name`。
+1. **定目标。** 最终评估固定用 `final_metric: f1_e2e`：全部行上的 F1，被拒判的行由二次判断决定，没有二次判断时回退到阈值，和团队口径一致。RSI 过程中用来比较候选的 `objective.metric` 可以换成别的指标，例如 `f1`（只算被接受的行，配合 `min_coverage`）、`cost_e2e`、`recall_e2e`。用户没说就用 `f1_e2e`。目标一旦定下，整个 run 都不改；要改就开一个新 `run_name`。
+   - 拒判是好事的条件：被接受行的 F1（`f1_accepted`）提高，同时被拒判的大多是一阶段会判错的行（`first_err_rate_deferred` 远高于 `first_err_rate_accepted`）。被拒判的行要交给二次判断（`second_stage.apply_to: band`），整体 `f1_e2e` 才会变。只拒判不做二次判断时，`f1_e2e` 不变。
 2. **检查数据和协议。** 跑 `python -m dpolicy check <config>`，确认 fit 和 select 的行数、正例数、step。默认协议 `by: step` 用 val 的前 60% 个 step 拟合，后 40% 比较候选，模拟"拟合用过去，用在未来"。
 3. **评估基线。** 跑 `python -m dpolicy init <config>`：基线策略（`configs/policies/baseline_f1.yaml`，等于团队现在的做法）成为 incumbent。然后读 `<out>/eval/<hash>/diagnosis.md`。
 4. **诊断。** 用 3–5 句话写下当前策略的问题，每条带证据（数字、step、典型 case）。`findings` 到进化方向的对应关系见 `reference/diagnosis_playbook.md`。
@@ -46,7 +42,12 @@ p ──► 校准（none | platt | temperature | isotonic）
    - 全部记入 `archive.jsonl`，并重写 `report.md`。
 7. **读 `report.md` 和新 incumbent 的 diagnosis，回到第 4 步。** 停止条件（任一满足）：连续 2 轮没有候选被接受；候选总数达到用户给的预算（默认 30）；诊断里剩下的都是"需要重新训练"类的问题。
 8. **最终测试（必须先问用户）。** 跑 `python -m dpolicy final-test <config> --allow-test`：baseline 和 incumbent 都在全部 val 上重拟合，在 test 上**只跑一次**，结果写入 `final_test.json`（含 pre43/post43 子集）。重跑需要 `--again`，也要先得到用户同意。
-9. **汇报**：incumbent 的 YAML，select 上和 test 上相对 baseline 的收益及 CI，评估过的候选数，剩下的问题。
+9. **汇报**：
+   - incumbent 的 YAML；
+   - test 上的 `f1_e2e`，以及相对 baseline 的配对收益和 CI；
+   - 拒判情况：被拒判的比例、`f1_accepted`，被拒判的行由一阶段判和由二次判断判时各自的 F1，以及被拒判行与被接受行的一阶段错误率；
+   - 其他指标、pre43 和 post43 子集；
+   - 评估过的候选数，以及还没解决的问题。
 
 ## 规则
 

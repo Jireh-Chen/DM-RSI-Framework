@@ -18,9 +18,9 @@ def make(seed: int = 0, rows_per_step: int = 800) -> dict[str, pd.DataFrame]:
             post = s >= 43
             prev = 0.03 if post else 0.07
             y = (rng.random(rows_per_step) < prev).astype(int)
-            f1 = rng.normal(0, 1, rows_per_step) + 1.2 * y          # a feature the model partly ignores
+            f1 = rng.normal(0, 1, rows_per_step) + 1.5 * y          # a feature the model never sees
             shift = -1.0 if post else 0.0
-            z = -3.0 + 2.8 * y + 0.6 * f1 + rng.normal(0, 1.0, rows_per_step) + shift
+            z = -3.0 + 2.6 * y + rng.normal(0, 1.0, rows_per_step) + shift
             p = 1 / (1 + np.exp(-1.6 * z))                            # overconfident scores
             ids = [f"a{split}{s}x{i}_{s}" for i in range(rows_per_step)]
             parts.append(pd.DataFrame({"id": ids, "y": y, "p": p, "post43": post, "f1": f1}))

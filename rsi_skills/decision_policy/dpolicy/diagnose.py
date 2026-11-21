@@ -8,7 +8,7 @@ import pandas as pd
 
 from dpolicy.calibration import logit
 from dpolicy.decision import choose_threshold
-from dpolicy.metrics import all_metrics, counts, from_counts
+from dpolicy.metrics import counts, dec_metrics, from_counts
 
 
 def _fmt(v):
@@ -50,10 +50,10 @@ def reliability(y, p, bins: int = 10) -> pd.DataFrame:
 
 def diagnose(dec: pd.DataFrame, *, fit_pos_rate: float | None = None, costs=None, top_k: int = 10) -> dict:
     y, d, pc = dec.y.to_numpy(int), dec.decision.to_numpy(int), dec.p_cal.to_numpy(float)
-    out: dict = {"overall": all_metrics(y, d, pc, costs), "findings": []}
+    out: dict = {"overall": dec_metrics(dec, costs), "findings": []}
     F = out["findings"]
     if "post43" in dec.columns:
-        out["subsets"] = {name: all_metrics(g.y, g.decision, g.p_cal, costs)
+        out["subsets"] = {name: dec_metrics(g, costs)
                           for name, g in (("pre43", dec[~dec.post43.astype(bool)]), ("post43", dec[dec.post43.astype(bool)]))
                           if len(g) and g.y.nunique() == 2}
     if "step" in dec.columns:
@@ -84,6 +84,16 @@ def diagnose(dec: pd.DataFrame, *, fit_pos_rate: float | None = None, costs=None
         if share > 0.5:
             F.append({"issue": "errors_near_threshold", "evidence": f"{share:.0%} of errors are within 1 logit of the threshold",
                       "try": "abstain.coverage < 1, optionally with second_stage on the band"})
+    o = out["overall"]
+    if o.get("n_deferred"):
+        a, b = o.get("first_err_rate_deferred", 0.0), o.get("first_err_rate_accepted", 0.0)
+        if a < 2 * b:
+            F.append({"issue": "deferral_not_selective", "evidence": f"first-stage error rate {a:.3f} on deferred rows vs {b:.3f} on accepted",
+                      "try": "the band is not catching the hard rows: recalibrate first, or a narrower band (higher coverage)"})
+        if "f1_deferred_final" in o and o["f1_deferred_final"] <= o.get("f1_deferred_first", 0.0):
+            F.append({"issue": "second_stage_not_helping",
+                      "evidence": f"F1 on deferred rows {o['f1_deferred_final']:.3f} with the second stage vs {o.get('f1_deferred_first', 0.0):.3f} first stage",
+                      "try": "second_stage.model: hgb, add features, or widen the band so it has more rows to learn from"})
     fn_conf = int(((d == 0) & (y == 1) & (pc < 0.05)).sum())
     fp_conf = int(((d == 1) & (y == 0) & (pc > 0.95)).sum())
     out["confident_errors"] = {"fn_p_lt_0.05": fn_conf, "fp_p_gt_0.95": fp_conf}
@@ -100,7 +110,9 @@ def diagnose(dec: pd.DataFrame, *, fit_pos_rate: float | None = None, costs=None
 
 def to_markdown(diag: dict, title: str) -> str:
     o = diag["overall"]
-    keys = ["n", "n_pos", "coverage", "precision", "recall", "f1", "recall_all", "cost", "auprc", "auroc", "brier", "ece"]
+    keys = ["n", "n_pos", "f1_e2e", "coverage", "f1", "precision", "recall", "f1_first", "deferred_share",
+            "first_err_rate_deferred", "first_err_rate_accepted", "f1_accepted", "f1_deferred_first", "f1_deferred_final",
+            "cost_e2e", "auprc", "auroc", "brier", "ece"]
     lines = [f"# Diagnosis: {title}", "", "## Overall", ""]
     lines += _table(pd.DataFrame([{k: o.get(k, float("nan")) for k in keys}]))
     if diag.get("subsets"):

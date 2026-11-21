@@ -1,0 +1,6 @@
+# Demo proposal (synthetic data only): defer the 30% of rows nearest the threshold and re-decide them with a
+# small model that also sees the feature f1 (which the synthetic "model" under-uses).
+name: demo_abstain30_logreg_f1
+note: errors_near_threshold -> the band holds most first-stage errors; f1 carries signal the score misses
+abstain: {coverage: 0.7}
+second_stage: {enabled: true, model: logreg, apply_to: band, features: [f1]}

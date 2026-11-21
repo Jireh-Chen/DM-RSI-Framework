@@ -21,7 +21,7 @@ import yaml
 from dpolicy.bootstrap import paired_diff
 from dpolicy.data import load_features, load_split, split_protocol
 from dpolicy.diagnose import diagnose, to_markdown
-from dpolicy.metrics import all_metrics, objective
+from dpolicy.metrics import dec_metrics, objective, resolve
 from dpolicy.policy import PolicyError, normalize, run_policy, spec_hash
 
 DEFAULT_SPACE = {
@@ -34,7 +34,18 @@ DEFAULT_SPACE = {
               {"mode": "rolling", "delay": 1, "window": 3}, {"mode": "rolling", "delay": 1, "window": None}],
     "second_stage": [{"enabled": False}, {"enabled": True, "model": "logreg", "apply_to": "band"},
                      {"enabled": True, "model": "hgb", "apply_to": "band"}],
+    # "*": several keys at once (merged into the policy). Abstain alone does not change f1_e2e (deferred rows fall
+    # back to the threshold), so abstain + second stage on the band must be reachable in one step.
+    "*": [{"abstain": {"coverage": c}, "second_stage": {"enabled": True, "model": m, "apply_to": "band"}}
+          for c in (0.9, 0.8, 0.7) for m in ("logreg", "hgb")],
 }
+
+
+def _merge(base: dict, patch: dict) -> dict:
+    out = copy.deepcopy(base)
+    for k, v in patch.items():
+        out[k] = _merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else copy.deepcopy(v)
+    return out
 
 
 def read_yaml(path) -> dict:
@@ -63,6 +74,13 @@ def _jsonable(o):
     return o
 
 
+def obj_decisions(dec: pd.DataFrame, obj: dict):
+    """Decisions the objective is computed on: end-to-end (deferred -> first stage) for *_e2e metrics."""
+    if obj.get("metric", "f1_e2e").endswith("_e2e"):
+        return resolve(dec.decision.to_numpy(), dec.decision_first.to_numpy())
+    return dec.decision.to_numpy()
+
+
 class Run:
     """Holds one RSI run: config, data parts, output directory, archive and incumbent."""
 
@@ -73,7 +91,8 @@ class Run:
         d = self.cfg["data"]
         self.scores_dir = (base / Path(d["scores_dir"]).expanduser()).resolve()
         self.out = Path(out_dir or base / self.cfg.get("out_dir", f"runs/{self.cfg['run_name']}")).expanduser().resolve()
-        self.obj = self.cfg.get("objective", {"metric": "f1"})
+        self.obj = self.cfg.get("objective", {"metric": "f1_e2e"})
+        self.final_metric = self.cfg.get("final_metric", "f1_e2e")   # headline of final-test (team: F1 on all rows)
         self.costs = self.cfg.get("costs", {})
         self.boot = self.cfg.get("bootstrap", {"reps": 1000})
         self.accept = self.cfg.get("accept", {"min_lo": 0.0})
@@ -117,14 +136,14 @@ class Run:
         h = spec_hash(spec)
         dec, fits = self.decide(spec)
         dec = dec.set_index("id").loc[self.select["id"]].reset_index()
-        m = all_metrics(dec.y, dec.decision, dec.p_cal, self.costs)
+        m = dec_metrics(dec, self.costs)
         rec = {"time": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "iteration": iteration,
                "hash": h, "name": spec.get("name"), "parent": spec.get("parent"), "source": source,
                "spec": spec, "metrics": m, "objective": objective(m, self.obj),
                "fits": fits if len(fits) <= 3 else fits[:1] + [f"... {len(fits) - 1} more per-step fits"]}
         if incumbent_dec is not None:
             steps = dec["step"].to_numpy() if "step" in dec.columns else None
-            rec["vs_incumbent"] = paired_diff(dec.y.to_numpy(), dec.decision.to_numpy(), incumbent_dec.decision.to_numpy(),
+            rec["vs_incumbent"] = paired_diff(dec.y.to_numpy(), obj_decisions(dec, self.obj), obj_decisions(incumbent_dec, self.obj),
                                               self.obj, self.costs, steps=steps, reps=int(self.boot.get("reps", 1000)),
                                               seed=int(self.boot.get("seed", 20261121)),
                                               level=float(self.boot.get("level", 0.95)))
@@ -172,6 +191,16 @@ def mutate(spec: dict, space: dict, rng: random.Random, tries: int = 20) -> dict
     base = normalize(spec)
     for _ in range(tries):
         key = rng.choice(sorted(space))
+        if key == "*":
+            new = _merge(base, rng.choice(space[key]))
+            if spec_hash(new) == spec_hash(base):
+                continue
+            try:
+                new = normalize(new)
+            except PolicyError:
+                continue
+            new["parent"], new["name"] = spec_hash(base), "auto:abstain+second_stage"
+            return new
         new = copy.deepcopy(base)
         parts = key.split(".")
         node = new
@@ -239,7 +268,8 @@ def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
                 log(f"iteration {it}: {s.get('name')} failed: {e}")
                 continue
             v = rec["vs_incumbent"]
-            rec["passes_accept"] = v["lo"] is not None and v["lo"] > min_lo
+            rec["passes_accept"] = (v["lo"] is not None and v["lo"] > min_lo
+                                    and np.isfinite(num(rec["objective"])))   # min_coverage is checked here
             rec["accepted"] = False
             recs.append(rec)
             if rec["passes_accept"] and (best is None or v["diff"] > best["vs_incumbent"]["diff"]):
@@ -273,7 +303,8 @@ def write_report(run: Run) -> Path:
              ""]
     if inc:
         lines += [f"## Incumbent `{spec_hash(inc)}`", "", "```yaml", yaml.safe_dump(inc, sort_keys=False).strip(), "```", ""]
-    keys = ["objective", "f1", "precision", "recall", "coverage", "cost", "auprc", "ece"]
+    keys = ["objective", "f1_e2e", "coverage", "f1_accepted", "f1_deferred_first", "f1_deferred_final",
+            "first_err_rate_deferred", "first_err_rate_accepted", "precision_e2e", "recall_e2e", "cost_e2e", "auprc", "ece"]
     lines += ["## Archive (best first)", "", "| it | hash | name | source | accepted | " + " | ".join(keys) + " | gain vs incumbent of its iteration [CI] |",
               "|" + "---|" * (6 + len(keys))]
     for r in sorted(recs, key=lambda r: -num(r["objective"]) if np.isfinite(num(r["objective"])) else np.inf):
@@ -305,17 +336,48 @@ def final_test(run: Run, *, policies: dict[str, dict], again: bool = False) -> d
     out = {"time": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "n_test": len(test), "policies": {}}
     base = decs.get("baseline")
     for k, dec in decs.items():
-        entry = {"spec": run.prepare(policies[k]), "metrics": all_metrics(dec.y, dec.decision, dec.p_cal, run.costs)}
+        entry = {"spec": run.prepare(policies[k]), "metrics": dec_metrics(dec, run.costs)}
         entry["objective"] = objective(entry["metrics"], run.obj)
+        entry["final_metric"] = {"name": run.final_metric, "value": entry["metrics"][run.final_metric]}
         if "post43" in dec.columns:
-            entry["subsets"] = {n: all_metrics(g.y, g.decision, g.p_cal, run.costs)
+            entry["subsets"] = {n: dec_metrics(g, run.costs)
                                 for n, g in (("pre43", dec[~dec.post43.astype(bool)]), ("post43", dec[dec.post43.astype(bool)]))
                                 if len(g) and g.y.nunique() == 2}
         if base is not None and k != "baseline":
-            entry["vs_baseline"] = paired_diff(dec.y.to_numpy(), dec.decision.to_numpy(), base.decision.to_numpy(), run.obj,
-                                               run.costs, steps=dec["step"].to_numpy() if "step" in dec.columns else None,
-                                               reps=int(run.boot.get("reps", 1000)), seed=int(run.boot.get("seed", 20261121)))
+            steps = dec["step"].to_numpy() if "step" in dec.columns else None
+            kw = dict(steps=steps, reps=int(run.boot.get("reps", 1000)), seed=int(run.boot.get("seed", 20261121)))
+            fm = {"metric": run.final_metric}
+            entry["vs_baseline"] = {
+                "final_metric": paired_diff(dec.y.to_numpy(), obj_decisions(dec, fm), obj_decisions(base, fm), fm, run.costs, **kw),
+                "objective": paired_diff(dec.y.to_numpy(), obj_decisions(dec, run.obj), obj_decisions(base, run.obj), run.obj,
+                                         run.costs, **kw)}
         out["policies"][k] = entry
         dec.to_parquet(run.out / f"final_test_{k}.parquet", index=False)
     path.write_text(json.dumps(_jsonable(out), indent=1, ensure_ascii=False))
+    (run.out / "final_test.md").write_text(final_markdown(run, out))
     return out
+
+
+FINAL_KEYS = ["f1_e2e", "precision_e2e", "recall_e2e", "f1_first", "coverage", "f1", "deferred_share", "f1_accepted",
+              "f1_deferred_first", "f1_deferred_final", "first_err_rate_deferred", "first_err_rate_accepted",
+              "share_of_first_errors_deferred",
+              "cost_e2e", "auprc", "auroc", "brier", "ece"]
+
+
+def final_markdown(run: "Run", out: dict) -> str:
+    lines = [f"# Final test: {run.cfg['run_name']}", "",
+             f"- test rows: {out['n_test']:,}; every policy refitted on all val rows, applied once",
+             f"- final metric: **{run.final_metric}** (F1 on all rows; deferred rows decided by the second stage, "
+             "or by the first-stage threshold when there is none)",
+             "- f1 / precision / recall without suffix: on the rows the policy accepted (coverage); *_first: first stage alone",
+             "", "| policy | subset | " + " | ".join(FINAL_KEYS) + " |", "|" + "---|" * (2 + len(FINAL_KEYS))]
+    for k, e in out["policies"].items():
+        for sub, m in [("all", e["metrics"])] + list((e.get("subsets") or {}).items()):
+            lines.append(f"| {k} | {sub} | " + " | ".join(f"{num(m.get(c)):.4f}" for c in FINAL_KEYS) + " |")
+    lines += ["", "## Paired gain vs baseline (95% CI, bootstrap stratified by step)", ""]
+    for k, e in out["policies"].items():
+        if e.get("vs_baseline"):
+            v = e["vs_baseline"]
+            lines.append(f"- {k}: {run.final_metric} {_ci(v['final_metric'])}; objective "
+                         f"({run.obj.get('metric')}) {_ci(v['objective'])}")
+    return "\n".join(lines) + "\n"

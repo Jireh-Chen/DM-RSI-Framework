@@ -11,7 +11,8 @@ from dpolicy.policy import normalize, spec_hash
 
 def _summary(rec: dict) -> dict:
     m = rec["metrics"]
-    keys = ("f1", "precision", "recall", "coverage", "cost", "auprc", "ece")
+    keys = ("f1_e2e", "f1_first", "coverage", "f1_accepted", "f1_deferred_first", "f1_deferred_final",
+            "first_err_rate_deferred", "first_err_rate_accepted", "auprc", "ece")
     out = {"hash": rec["hash"], "name": rec["name"], "objective": rec["objective"], **{k: m.get(k) for k in keys},
            "findings": rec.get("findings")}
     if rec.get("vs_incumbent"):
