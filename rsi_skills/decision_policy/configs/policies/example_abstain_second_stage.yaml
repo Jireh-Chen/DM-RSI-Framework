@@ -1,0 +1,8 @@
+# Example proposal: defer the 10% of rows closest to the threshold and re-decide them with a small
+# gradient-boosting model on [logit(p_cal), extra features]. Needs data.features_path in the run config
+# when features are listed.
+name: abstain10_hgb
+calibration: {method: platt}
+decision: {rule: max_f1}
+abstain: {coverage: 0.9}
+second_stage: {enabled: true, model: hgb, apply_to: band, features: []}

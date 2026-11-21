@@ -1,0 +1,7 @@
+# Example proposal (copy into <out>/proposals/ to have `dpolicy evolve` evaluate it).
+# Refit a Platt map and the F1 threshold before each step on the last 3 labelled steps, labels 1 step late
+# (the setting of crypto-fraud-detection elephant/scripts/rolling_recalib.py).
+name: rolling_platt_w3
+calibration: {method: platt}
+decision: {rule: max_f1}
+refit: {mode: rolling, delay: 1, window: 3}

@@ -1,0 +1,8 @@
+[submodule "external/onejev-harness"]
+	path = external/onejev-harness
+	url = https://github.com/BoruiXu/Decision-Model-Study
+	branch = onejev-harness
+[submodule "external/crypto-fraud-detection"]
+	path = external/crypto-fraud-detection
+	url = https://github.com/BoruiXu/Decision-Model-Study
+	branch = crypto-fraud-detection-tasks

@@ -1,0 +1,30 @@
+# onejev-harness experiment: Elephant-1 full fine-tune on Elliptic++ address txhist (noul), the team's
+# EL_full_txhist_all setting. Copy to a workspace OUTSIDE this repo ($OJH_WORK_ROOT/<name>/exp.yaml) and run
+#   $OJH check exp.yaml --base elephant-1 --gpus 0,1      (no GPU needed)
+#   $OJH run   exp.yaml --base elephant-1 --gpus 0,1
+# Keys and meaning: external/onejev-harness/examples/exp.template.yaml. Recipe = elephant-1 default
+# (examples/recipes/elephant_full_fsdp.yaml, lr 3.5e-6); the team's crypto run used lr 5e-6 — to match it,
+# add an override with a reason (ask the team first).
+
+name: elliptic-txhist-elephant-1-full-2g
+
+data:
+  adapter: onejev_rows                    # rows are already OneJev rows
+  train: $DMRSI_DATA/data/onejev/addr_txhist_noul/train.jsonl
+  eval:
+    val:
+      train_labels: $DMRSI_DATA/data/onejev/addr_txhist_noul/val_sub4000.jsonl
+
+fields:
+  label: target.yes                       # noul question: P(illicit) = P(yes)
+  group: meta.state_id                    # address: within-address AUC and grouped bootstrap
+  text: state_json                        # text for the tfidf / length baselines of the gate
+
+evaluator:
+  type: binary_decision
+  gate: true                              # must beat the best text baseline on val AUC (reported, not a blocker for RSI)
+
+seeds: [0]
+overrides: {}
+# overrides:
+#   lr: {value: 5.0e-6, reason: "match crypto-fraud-detection EL_full_txhist_all_s0"}

@@ -1,0 +1,32 @@
+# RSI run for Elephant-1 on Elliptic++ (address level). Paths relative to this file; ~ and $VAR are NOT expanded
+# except ~ (keep absolute paths on the server).
+run_name: elliptic_elephant_txhist_s0
+out_dir: ../runs/elliptic_elephant_txhist_s0            # archive, incumbent, diagnoses, report
+data:
+  # <name>_{val,test}.parquet written by pipelines/elliptic_elephant/score_checkpoint.sh
+  # (columns id, y, p, post43, seen_in_train, step, logit_pos, logit_neg)
+  scores_dir: /CHANGE/ME/results/elephant
+  name: EL_full_txhist_all_s0
+  val_split: val
+  test_split: test
+  step_from_id: false            # onejev_score.py already writes a step column
+  # features_path: /CHANGE/ME/features.parquet   # optional, id + numeric columns, for second_stage features
+  # feature_columns: []
+protocol:
+  by: step                       # val = steps 30-34; fit on 30-32, compare candidates on 33-34 (later period)
+  select_frac: 0.4
+objective:
+  metric: f1                     # same headline metric as eval_decisions.py (computed on covered rows)
+  min_coverage: 1.0              # no abstention: F1 on covered rows would reward deferring the hard rows.
+  # To evolve abstention / second-stage review, compare on cost instead (deferrals are charged costs.defer):
+  # metric: cost
+  # min_coverage: 0.9
+costs: {fp: 1.0, fn: 10.0, defer: 0.5}   # used by rule: cost and by the reported cost metric; agree on these with the team
+bootstrap: {reps: 1000, seed: 20261121, level: 0.95}   # stratified by step
+accept: {min_lo: 0.0}            # new incumbent only if the paired CI lower bound of the gain > 0
+baseline: policies/baseline_f1.yaml
+evolve:
+  iterations: 3
+  auto_candidates: 8
+  seed: 0
+  # search_space: {...}          # default: dpolicy/evolve.py DEFAULT_SPACE

@@ -1,0 +1,18 @@
+# Demo run on synthetic scores (python -m dpolicy.synthetic --out runs/demo_scores). Paths are relative to this file.
+run_name: demo_synthetic
+out_dir: ../runs/demo_synthetic
+data:
+  scores_dir: ../runs/demo_scores
+  name: SYN
+  val_split: val
+  test_split: test
+  step_from_id: true
+  features_path: ../runs/demo_scores/SYN_features.parquet
+  feature_columns: [f1]
+protocol: {by: step, select_frac: 0.4}
+objective: {metric: cost, min_coverage: 0.8}   # cost charges deferrals; f1 on covered rows would reward abstaining
+costs: {fp: 1.0, fn: 10.0, defer: 0.5}
+bootstrap: {reps: 300, seed: 20261121, level: 0.95}
+accept: {min_lo: 0.0}
+baseline: policies/baseline_f1.yaml
+evolve: {iterations: 3, auto_candidates: 6, seed: 0}

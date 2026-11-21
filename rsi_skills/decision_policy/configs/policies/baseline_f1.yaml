@@ -1,0 +1,8 @@
+# Baseline policy = the team's current protocol (crypto-fraud-detection scripts/eval_decisions.py):
+# raw scores, one F1-optimal threshold chosen on labelled val rows, no abstention, no second stage.
+name: baseline_f1
+calibration: {method: none}
+decision: {rule: max_f1}
+abstain: {coverage: 1.0}
+second_stage: {enabled: false}
+refit: {mode: static}
