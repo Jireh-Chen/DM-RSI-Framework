@@ -26,7 +26,7 @@ pipelines/
 ## 开始
 
 ```bash
-git clone --recursive https://github.com/<owner>/DM-RSI-Framework.git
+git clone --recursive https://github.com/Jireh-Chen/DM-RSI-Framework.git
 cd DM-RSI-Framework/rsi_skills/decision_policy && pip install -e '.[dev]' && pytest -q   # 只需要 CPU
 ```
 

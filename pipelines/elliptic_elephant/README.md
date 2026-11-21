@@ -13,7 +13,7 @@
 ## 0. 环境
 
 ```bash
-git clone --recursive <本 repo>  &&  cd DM-RSI-Framework          # --recursive 会拉取 external/ 下固定 commit 的子模块
+git clone --recursive https://github.com/Jireh-Chen/DM-RSI-Framework.git  &&  cd DM-RSI-Framework          # --recursive 会拉取 external/ 下固定 commit 的子模块
 mkdir -p /big/disk/dmrsi && cp pipelines/elliptic_elephant/env.example.sh /big/disk/dmrsi/dmrsi-env.sh
 #   编辑文件里标 CHANGE 的两行（DMRSI_HOME、DMRSI_REPO）
 source /big/disk/dmrsi/dmrsi-env.sh
