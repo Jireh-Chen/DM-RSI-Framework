@@ -1,0 +1,5 @@
+name: p1_rolling_platt_w3
+note: "threshold_drift + prevalence_shift (pos rate 0.060 in select vs 0.092 in fit; step-33 oracle threshold 0.84 vs 0.148): refit Platt and the F1 threshold per step on the last 3 labelled steps, labels 1 step late"
+calibration: {method: platt}
+decision: {rule: max_f1}
+refit: {mode: rolling, delay: 1, window: 3}

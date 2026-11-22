@@ -67,10 +67,23 @@ python -m dpolicy init  configs/el_txhist_s0.yaml
 
 以后换成“前序优化后的模型”时，只重做第 3、4 步：新建一个运行配置，再用 `final-test --policy <旧 incumbent.yaml>` 复验旧策略能否迁移到新模型。
 
-## 未在服务器上验证的地方
+## 实测记录（2026-11-21/22，学校 8×A100 服务器）
 
-这些脚本写好了，但还没有在真实服务器上跑过。第一次跑时请留意：
+整条流程已经在真实服务器上跑通，下面是踩过的坑：
 
-- `01_build_data.sh` 直接调用 crypto 仓库的构建脚本，工作目录设在 `$DMRSI_DATA`，不写进子模块。
-- `03_score_checkpoint.sh` 把 pandas 装到 `$DMRSI_PYDEPS`，用 harness 的 venv 运行 `onejev_score.py`。
-- `exp.yaml` 用的是 harness 默认的 elephant 配方（lr 3.5e-6）；团队 crypto 实验用的是 5e-6。
+- **elephant-1 全参在 2 张 80 GB 卡上 OOM**（每卡 72.5 GB 的 fp32 权重、梯度和 AdamW 状态）。改用 LoRA：`recipes/elephant_lora_ddp_2g.yaml`，通过 `--recipe` 传入，harness 不用改。
+  LoRA 结果和团队的全参结果要分开报告。
+- **`causal-conv1d` 没被 setup.sh 装上**（constraints.txt 里锁了 1.7.0）。缺了它，模型会走慢速的纯 PyTorch 路径，第 1 步就要 430 秒。装进 harness 的 venv 后约 2 秒/步。这是对环境的改动，要先经过批准。
+- **LoRA 必须先合并再打分**：`02b_merge_lora.py` 在 CPU 上调用 harness 的 `merge_lora`；`05_check_merged.py` 核对合并前后（200 行，平均 |Δp| < 0.005）。
+  `onejev_score.py` 加载的是纯文本版模型，直接用 adapter 会静默跳过多模态的 key。
+- `03_score_checkpoint.sh` 要往 `$DMRSI_PYDEPS` 装 pandas 和 pyarrow（缺 pyarrow 时写 parquet 会失败），并默认关闭 `torch.compile`。
+- `after_training.sh`：训练结束后在服务器 tmux 里自动完成合并、核对、单卡打分，不依赖本机连接。
+- 数据环境要 Python 3.11（requirements_jev.txt 锁了 pandas 3.x），`01_build_data.sh` 会用 harness 装好的 uv 和 Python 3.11。
+
+## 共享 GPU 服务器的约定
+
+- 大文件（环境、权重、checkpoint、数据、分数、run 输出）放在共享大盘上自己的目录里，权限 700；`/home` 只放代码。
+- **每人最多 2 张卡**，超过的话管理员可以强杀最新的进程。只用完全没人在用的卡；GPU 任务放进 `pipelines/gpu_queue.sh` 排队。
+- **GPU 空闲看门狗**：进程占着显存、利用率低于 1% 持续 10 分钟，就会被终止。harness 的 finalize（CPU 上的 torch.compile）会触发它，checkpoint 不受影响，用 02b 加 03 补打分即可。不要用空跑 GPU 的办法绕过。
+- 机器负载常常很高：sklearn 等 CPU 任务设 `OMP_NUM_THREADS=4`。
+- 每个人的主机名、登录方式、实际目录记在本地的 `pipelines/elliptic_elephant/SERVER.md`，它已加入 `.gitignore`，不进仓库。

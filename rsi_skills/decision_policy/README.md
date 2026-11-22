@@ -4,13 +4,33 @@
 
 模型训练好并打完分以后，这个模块自进化它的**决策策略**：校准、阈值、拒判、二次判断、滚动重拟合。不改模型，也不重新训练。
 
+**推荐版本：Skill v3（`dpolicy` 3.0.0）**，在 test 上唯一显著优于 baseline。仓库里的 `dpolicy/` 是最新的 v4（v3 的超集，加了时间外 step CV），
+不写 `by: step_cv` 时和 v3 的行为完全相同。 各版本的功能、实现策略、更新内容和实验结果见 [`VERSIONS.md`](VERSIONS.md)；
+历史版本的代码在 [`history/`](history/README.md)；团队成员把这个 Skill 集成进自己仓库的 Claude prompt 见 [`docs/INTEGRATION_PROMPT.md`](docs/INTEGRATION_PROMPT.md)。
+
+| 版本 | 新增 | Elliptic × elephant-1 LoRA 上 test 领先提案的收益 |
+|---|---|---|
+| v1 | 校准、阈值、拒判、logit 二次判断、rolling、bootstrap 接受规则 | −0.035 |
+| v2 | 二次判断用特征表；no-op 标记 | −0.023 |
+| **v3（推荐）** | 二次判断多种子平均（`bags`） | **+0.0086（显著）** |
+| v4 | 时间外 step CV 协议（`by: step_cv`） | −0.013 |
+
+四个版本的 incumbent 都没变（baseline，test F1 0.610）：接受规则拦下了所有在 test 上变差的提案。
+
+### 团队成员怎么集成（推荐 v3）
+
+已经有 onejev-harness 和 Elliptic benchmark 的话，只需要三步：
+1. 下载 [`releases/decision_policy_v3.zip`](releases/decision_policy_v3.zip)（各版本见 [`releases/`](releases/README.md)，约 56 KB），在你的仓库根目录解压；
+2. 把 [`docs/INTEGRATION_PROMPT.md`](docs/INTEGRATION_PROMPT.md) 里的 prompt 贴给 Claude Code，告诉它“我已解压 decision_policy_v3.zip”；
+3. 按它的提问确认分数位置、运行配置和 final-test 的批准。
+
 ## 安装
 
 ```bash
 cd rsi_skills/decision_policy
 python -m venv .venv && . .venv/bin/activate      # 也可以用 uv / conda；只需要 CPU
 pip install -e '.[dev]'
-pytest -q                                          # 18 个测试，约 3 秒
+pytest -q                                          # 22 个测试，约 10 秒
 ```
 
 ## 5 分钟跑通（合成数据）
@@ -44,6 +64,8 @@ python -m dpolicy final-test configs/demo_synthetic.yaml --allow-test   # 只跑
 2. `cp configs/elliptic_elephant.yaml configs/<你的 run>.yaml`，把 `data.scores_dir` 和 `data.name` 改成实际值，再确认 `objective` 和 `costs`。
 3. 按 `SKILL.md` 的主流程执行：`check → init → 诊断 → proposals → evolve → …`，最后经批准后跑 `final-test`。
 
+完整的实际例子（配置、提案、3 副本运行脚本、结果汇总）：[`experiments/elliptic_elephant_lora2g/`](experiments/elliptic_elephant_lora2g/README.md)。
+
 对 Claude Code：在 repo 根目录打开即可，`.claude/skills/decision-policy-rsi` 指向本目录。直接说"用 decision-policy-rsi 在 <配置> 上进化决策策略"。
 
 ## 命令
@@ -71,16 +93,18 @@ final_test.{json,md}   test 结果：f1_e2e 为主，全部指标，pre43/post43
 ## 代码
 
 ```
-dpolicy/data.py          分数文件契约、test 锁、fit/select 协议
+dpolicy/data.py          分数文件契约、test 锁、fit/select 协议（by: step | group | step_cv）
 dpolicy/calibration.py   none / platt / temperature / isotonic
 dpolicy/decision.py      阈值规则、拒判带
-dpolicy/second_stage.py  轻量二次判断（out-of-fold 选阈值）
+dpolicy/second_stage.py  轻量二次判断（out-of-fold 选阈值，可多种子平均）
 dpolicy/policy.py        策略规范化、拟合与应用、static/rolling
 dpolicy/metrics.py       决策指标（含 defer）、分数指标、objective
 dpolicy/bootstrap.py     按 step 分层的配对 bootstrap
 dpolicy/diagnose.py      失败诊断和 findings
 dpolicy/evolve.py        归档、变异、接受规则、报告、final-test
 dpolicy/cli.py           命令行
+history/v1..v3/dpolicy/  历史版本快照（PYTHONPATH=history/v<N> python -m dpolicy ...）
+experiments/<实验>/      配置、提案、运行脚本、结果记录（run 输出本身不进 git）
 ```
 
 ## 和 spec 的对应

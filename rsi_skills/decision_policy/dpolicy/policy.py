@@ -45,6 +45,10 @@ def normalize(spec: dict) -> dict:
         raise PolicyError("second_stage.apply_to: band needs abstain.coverage < 1")
     if ss["apply_to"] not in ("band", "all"):
         raise PolicyError("second_stage.apply_to must be band | all")
+    if not (ss["features"] == "all" or isinstance(ss["features"], list)):
+        raise PolicyError("second_stage.features must be a list of column names or 'all'")
+    if int(ss.get("bags", 1)) < 1:
+        raise PolicyError("second_stage.bags must be >= 1")
     if rf["mode"] not in ("static", "rolling"):
         raise PolicyError("refit.mode must be static | rolling")
     return out
@@ -69,14 +73,16 @@ class Fitted:
         self.ss = None
         ss = spec["second_stage"]
         if ss["enabled"]:
-            self.feat = features[ss["features"]] if (features is not None and ss["features"]) else None
+            cols = list(features.columns) if (features is not None and ss["features"] == "all") else ss["features"]
+            self.feat = features[cols] if (features is not None and cols) else None
             if ss["features"] and features is None:
                 raise PolicyError("second_stage.features given but no data.features_path in the run config")
             rows = np.ones(len(y), bool)
             if ss["apply_to"] == "band":
                 rows = decide(pc, self.thr["threshold"], self.band) == -1
             X = matrix(fit_df["id"].to_numpy(), pc, self.feat)
-            self.ss = SecondStage(ss["model"], ss.get("rule", "max_f1"), seed=seed).fit(X[rows], y[rows])
+            self.ss = SecondStage(ss["model"], ss.get("rule", "max_f1"), seed=seed,
+                                  bags=int(ss.get("bags", 1))).fit(X[rows], y[rows])
         self.n_fit, self.pos_fit = len(y), int(y.sum())
 
     def apply(self, df: pd.DataFrame) -> pd.DataFrame:

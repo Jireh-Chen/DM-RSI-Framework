@@ -1,0 +1,4 @@
+name: q2_abstain90_hgb_feat
+note: "under-confident band p in [0.1,0.5) holds many positives: defer the 10% of rows nearest the cut and let hgb with features re-decide them; the first stage keeps the confident 90%"
+abstain: {coverage: 0.9}
+second_stage: {enabled: true, model: hgb, apply_to: band, features: all}

@@ -1,0 +1,4 @@
+name: p2_rolling_allhist
+note: "threshold_drift: same as baseline but refit the F1 threshold before each step on all labelled history (more rows than window 3, steadier threshold)"
+decision: {rule: max_f1}
+refit: {mode: rolling, delay: 1, window: null}

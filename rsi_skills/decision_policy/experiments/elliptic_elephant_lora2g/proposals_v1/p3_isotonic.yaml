@@ -1,0 +1,4 @@
+name: p3_isotonic
+note: "reliability: p_cal in [0.1,0.5) is strongly under-confident (observed 0.43-0.94 vs mean p 0.13-0.45), so the F1 cut sits in a badly ranked-to-probability region; isotonic maps it before thresholding"
+calibration: {method: isotonic}
+decision: {rule: max_f1}

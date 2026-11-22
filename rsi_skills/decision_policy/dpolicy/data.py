@@ -103,6 +103,27 @@ def split_protocol(val: pd.DataFrame, protocol: dict) -> tuple[pd.DataFrame, pd.
     return fit, select
 
 
+def step_cv_folds(val: pd.DataFrame, protocol: dict) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
+    """protocol ``by: step_cv`` (v4): each of the last ``cv_steps`` val steps is scored by a policy fitted on all
+    earlier steps only (expanding window, out of time). Pooling the folds lets candidates be compared on
+    ``cv_steps`` steps instead of the 2 a 60/40 step split leaves on Elliptic val (30-34), with the same
+    "fit on the past, use on the future" rule as ``by: step``."""
+    if "step" not in val.columns:
+        raise DataError("protocol by: step_cv needs a step column (or step_from_id: true)")
+    steps = sorted(val["step"].unique())
+    k = int(protocol.get("cv_steps", 3))
+    if not 1 <= k < len(steps):
+        raise DataError(f"cv_steps {k} needs 1 <= cv_steps < {len(steps)} distinct steps")
+    folds = []
+    for t in steps[-k:]:
+        fit, sel = val[val["step"] < t].reset_index(drop=True), val[val["step"] == t].reset_index(drop=True)
+        for part, df in (("fit", fit), ("select", sel)):
+            if df.empty or df["y"].nunique() < 2:
+                raise DataError(f"step_cv fold {t}: the {part} part has {len(df)} rows / one class")
+        folds.append((fit, sel))
+    return folds
+
+
 def load_features(path, columns: list[str] | None) -> pd.DataFrame:
     """Extra per-row features for a second-stage model, keyed by id (parquet or csv)."""
     path = Path(path)
