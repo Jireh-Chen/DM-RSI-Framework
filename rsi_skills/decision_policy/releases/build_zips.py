@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SKILL = "rsi_skills/decision_policy"
 OUT = ROOT / SKILL / "releases"
 # each version's dpolicy/, SKILL.md, reference/ and tests/: history/v<N>/ for old versions, the skill dir for the latest
-SRC = {1: f"{SKILL}/history/v1", 2: f"{SKILL}/history/v2", 3: f"{SKILL}/history/v3", 4: f"{SKILL}/history/v4", 5: f"{SKILL}/history/v5", 6: SKILL}
+SRC = {1: f"{SKILL}/history/v1", 2: f"{SKILL}/history/v2", 3: f"{SKILL}/history/v3", 4: f"{SKILL}/history/v4", 5: f"{SKILL}/history/v5", 6: f"{SKILL}/history/v6", 7: SKILL}
 PIPE = ["pipelines/elliptic_elephant/env.example.sh", "pipelines/elliptic_elephant/02b_merge_lora.py",
         "pipelines/elliptic_elephant/03_score_checkpoint.sh", "pipelines/elliptic_elephant/05_check_merged.py",
         "pipelines/gpu_queue.sh"]
@@ -38,7 +38,8 @@ TITLE = {1: "v1（1.0.0）：校准、阈值、拒判、logit 二次判断、rol
          3: "v3（3.0.0，推荐）：v2 + 二次判断多种子平均（bags）",
          4: "v4（4.0.0）：v3 + 时间外 step CV 协议（by: step_cv）",
          5: "v5（5.0.0）：v4 + 种群式搜索（evolve.parents、evolve.continuous）",
-         6: "v6（6.0.0）：v5 + 部署一致的协议（select_last）、step_cv 警告、跨 seed 共识（dpolicy consensus）"}
+         6: "v6（6.0.0）：v5 + 部署一致的协议（select_last）、step_cv 警告、跨 seed 共识（dpolicy consensus）",
+         7: "v7（7.0.0）：v6 + 按策略类别判断共识"}
 
 
 def guide(v: int, files: list[str]) -> str:

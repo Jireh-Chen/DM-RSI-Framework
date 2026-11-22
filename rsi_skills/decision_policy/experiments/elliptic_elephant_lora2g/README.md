@@ -212,6 +212,19 @@ v3 的 q1 +0.009，v2 的 q1 −0.023，v4 的 q2 −0.013。保守的接受规�
 **v7 final-test 预先登记（18:05，看第二个模型的 test 之前；按“每个版本各一次”的批准）**：`configs/long/v6t_k2_r1.yaml`（第二个模型），
 incumbent = 类别共识的代表 `5889bec21334`。第二个模型的 test 分数正在打，打完后运行，只跑这一次。
 
+**v7 final-test 结果**（第二个模型；test 97,756 行，test AUPRC 0.651、AUROC 0.887）：
+
+| 策略 | f1_e2e | precision | recall | pre43 F1 | post43 F1 | 相对 baseline [95% CI] |
+|---|---|---|---|---|---|---|
+| baseline | 0.6408 | 0.7352 | 0.5678 | 0.7643 | 0.4414 | — |
+| incumbent（类别共识代表：拒判 20% + 特征 hgb，静态；val 上 +0.0119 被接受） | 0.6207 | 0.6758 | 0.5740 | 0.7483 | 0.4195 | **−0.0200 [−0.0257, −0.0143]** |
+
+读法：
+- 在第二个模型上，val 上被接受（3 个 seed 中 2 个同类）的静态策略，到了 test 上反而变差。同一类策略在第一个模型上（r0 的静态 incumbent）是 +0.033。
+  所以“拒判带 + 特征二次判断”的效果在 test 上并不稳定，val 上的接受（即使跨 seed 达成共识）也不能保证 test 上有提升。
+- 目前唯一在 test 上大幅、稳定为正的是**滚动**策略（v5 领先 +0.067、v6 共识 +0.091），它的收益主要来自部署时延迟到达的标签，而不是 val 能看到的东西。
+- 顺带的发现：第二个模型（最后一步，val NLL 稍差）的 test baseline 是 0.641，比按 val NLL 选中的第 2640 步（0.610）还高。说明在 Elliptic 上，val 指标连 checkpoint 选择都不能很好地预测 test，根源同样是 step 43 之后的分布突变。
+
 ## 存储位置
 
 服务器约定见 `pipelines/elliptic_elephant/README.md`。各次 run 在 `/shared/ssd/yile/dmrsi/rsi/el_lora2g_v<版本>_r<副本>/`。
