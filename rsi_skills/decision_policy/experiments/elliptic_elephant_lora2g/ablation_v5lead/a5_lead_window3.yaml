@@ -1,0 +1,5 @@
+name: a5_lead_window3
+note: "v5 lead refitted on the last 3 labelled steps only (faster forgetting)"
+abstain: {coverage: 0.9}
+second_stage: {enabled: true, model: hgb, apply_to: band, features: all, bags: 9}
+refit: {mode: rolling, delay: 1, window: 3}

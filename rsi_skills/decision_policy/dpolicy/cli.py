@@ -5,7 +5,7 @@ import argparse
 import json
 import sys
 
-from dpolicy.evolve import Run, evolve, final_test, read_yaml, write_report
+from dpolicy.evolve import Run, consensus, evolve, final_test, protocol_warnings, read_yaml, write_report, write_yaml
 from dpolicy.policy import normalize, spec_hash
 
 
@@ -43,6 +43,11 @@ def main(argv=None) -> int:
     a = sub.add_parser("report", help="rewrite report.md from the archive")
     a.add_argument("config")
 
+    a = sub.add_parser("consensus", help="v6: candidates across replicate runs (seeds): passes and mean gain")
+    a.add_argument("config")
+    a.add_argument("more", nargs="+", help="the other replicates' configs")
+    a.add_argument("--top", type=int, default=10)
+
     a = sub.add_parser("final-test", help="refit baseline and incumbent on all val, apply ONCE to test")
     a.add_argument("config")
     a.add_argument("--allow-test", action="store_true", required=True)
@@ -60,7 +65,7 @@ def main(argv=None) -> int:
                           "select": {"rows": len(run.select), "pos": int(run.select.y.sum()),
                                      "steps": sorted(map(int, run.select.step.unique())) if "step" in run.select else None},
                           "features": None if run.features is None else list(run.features.columns),
-                          "objective": run.obj, "costs": run.costs}, indent=1))
+                          "objective": run.obj, "costs": run.costs, "warnings": protocol_warnings(run)}, indent=1))
     elif args.cmd == "init":
         if run.incumbent() is not None:
             print(f"{run.out}/incumbent.yaml exists; this run is already initialised", file=sys.stderr)
@@ -85,6 +90,16 @@ def main(argv=None) -> int:
                          indent=1, default=str))
     elif args.cmd == "report":
         print(write_report(run))
+    elif args.cmd == "consensus":
+        runs = [run] + [Run(c) for c in args.more]
+        rows = consensus(runs)
+        for e in rows[: args.top]:
+            print(f"{e['hash']} {str(e['name'])[:36]:36s} passed {e['passed']}/{len(runs)} in {e['runs']} runs, "
+                  f"mean gain {e['mean_gain']:+.4f}{'  CONSENSUS' if e['consensus'] else ''}")
+        best = next((e for e in rows if e["consensus"]), None)
+        if best:
+            write_yaml(run.out / "consensus.yaml", best["spec"])
+            print(f"consensus pick written to {run.out / 'consensus.yaml'}")
     elif args.cmd == "final-test":
         inc, base = run.incumbent(), read_yaml(run.out / "baseline.yaml")
         pols = {"baseline": base, "incumbent": inc}

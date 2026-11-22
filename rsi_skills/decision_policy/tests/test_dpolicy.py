@@ -304,3 +304,31 @@ def test_v5_population_search_runs_every_round(tmp_path, scores):
               for tag in ("v4", "v5")}
     assert rounds["v5"] == set(range(1, 13))          # the population search never runs dry
     assert len(rounds["v4"]) < 12                       # single-step mutations of a fixed incumbent do
+
+
+def test_v6_select_last_and_consensus(tmp_path, scores):
+    from dpolicy.evolve import Run, consensus
+    val = load_split(scores, "SYN", "val", step_from_id=True)
+    steps = sorted(val.step.unique())
+    fit, sel = split_protocol(val, {"by": "step", "select_last": 2})
+    assert sorted(sel.step.unique()) == steps[-2:] and fit.step.max() < steps[-2]
+    pol = tmp_path / "base.yaml"
+    pol.write_text(yaml.safe_dump({"name": "base"}))
+    cfgs = []
+    for r in range(3):
+        cfg = tmp_path / f"r{r}.yaml"
+        cfg.write_text(yaml.safe_dump({"run_name": f"r{r}", "out_dir": str(tmp_path / f"r{r}"), "baseline": str(pol),
+                                       "bootstrap": {"reps": 20}, "protocol": {"by": "step", "select_last": 2},
+                                       "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True},
+                                       "evolve": {"iterations": 2, "auto_candidates": 3, "seed": r}}))
+        assert main(["init", str(cfg)]) == 0 and main(["evolve", str(cfg)]) == 0
+        cfgs.append(str(cfg))
+    rows = consensus([Run(c) for c in cfgs])
+    assert rows and all(0 <= e["passed"] <= e["runs"] <= 3 for e in rows)
+    assert main(["consensus", *cfgs]) == 0
+    cv = tmp_path / "cv.yaml"
+    cv.write_text(yaml.safe_dump({"run_name": "cv", "out_dir": str(tmp_path / "cv"), "baseline": str(pol),
+                                  "protocol": {"by": "step_cv", "cv_steps": 2},
+                                  "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True}}))
+    from dpolicy.evolve import protocol_warnings
+    assert protocol_warnings(Run(cv)) and not protocol_warnings(Run(cfgs[0]))
