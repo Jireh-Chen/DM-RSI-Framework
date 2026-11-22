@@ -5,4 +5,4 @@ optional abstain band -> optional lightweight second-stage model. It never touch
 weights and never reads training curves. See ../README.md and ../SKILL.md.
 """
 
-__version__ = "6.0.0"   # Skill v6 (current); older versions in ../history/, see ../VERSIONS.md
+__version__ = "7.0.0"   # Skill v7 (current); older versions in ../history/, see ../VERSIONS.md

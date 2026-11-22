@@ -332,3 +332,12 @@ def test_v6_select_last_and_consensus(tmp_path, scores):
                                   "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True}}))
     from dpolicy.evolve import protocol_warnings
     assert protocol_warnings(Run(cv)) and not protocol_warnings(Run(cfgs[0]))
+
+
+def test_v7_family_ignores_tuned_numbers():
+    from dpolicy.evolve import family
+    a = {"abstain": {"coverage": 0.8}, "second_stage": {"enabled": True, "model": "hgb", "features": "all"}}
+    b = {"abstain": {"coverage": 0.946}, "second_stage": {"enabled": True, "model": "hgb", "features": "all", "bags": 3}}
+    c = {**a, "refit": {"mode": "rolling", "delay": 1, "window": None}}
+    assert family(a) == family(b) == "band+hgb[feat]/max_f1/static"
+    assert family(c) != family(a) and family({"name": "x"}) == "none/max_f1/static"

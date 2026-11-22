@@ -425,6 +425,43 @@ def consensus(runs: list, min_share: float = 0.5) -> list[dict]:
     return sorted(out, key=lambda e: (-e["passed"], -e["mean_gain"]))
 
 
+def family(spec: dict) -> str:
+    """v7: the structure of a policy without its tuned numbers, e.g. "band+hgb[feat]/max_f1/static". Replicates and
+    models agree on the family long before they agree on exact values (coverage 0.80 vs 0.946 are the same idea)."""
+    s = normalize(spec)
+    ss, ab = s["second_stage"], s["abstain"]
+    stage = "none"
+    if ss["enabled"]:
+        where = "band" if ss["apply_to"] == "band" else "all"
+        stage = f"{where}+{ss['model']}[{'feat' if ss['features'] else 'logit'}]"
+    elif float(ab["coverage"]) < 1:
+        stage = "abstain-only"
+    cal = s["calibration"]["method"]
+    return f"{stage}/{s['decision']['rule']}/{s['refit']['mode']}" + ("" if cal == "none" else f"/{cal}")
+
+
+def family_consensus(runs: list, min_share: float = 0.5) -> list[dict]:
+    """v7: per policy family, in how many replicates the *accepted incumbent* belongs to it. A family held by more than
+    min_share of the replicates is the consensus; its representative is the replicate incumbent with the largest
+    accepted gain (each replicate's incumbent already passed the acceptance rule on its own)."""
+    fams = {}
+    for run in runs:
+        recs = run.archive()
+        acc = [r for r in recs if r.get("accepted") and r.get("source") != "baseline"]
+        if not acc:
+            continue
+        last = acc[-1]
+        e = fams.setdefault(family(last["spec"]), {"family": family(last["spec"]), "runs": [], "best": None})
+        e["runs"].append(run.cfg["run_name"])
+        if e["best"] is None or num(last["vs_incumbent"]["diff"]) > num(e["best"]["vs_incumbent"]["diff"]):
+            e["best"] = {**last, "run": run.cfg["run_name"]}
+    out = []
+    for e in fams.values():
+        e["consensus"] = len(e["runs"]) > min_share * len(runs)
+        out.append(e)
+    return sorted(out, key=lambda e: -len(e["runs"]))
+
+
 def write_report(run: Run) -> Path:
     recs = run.archive()
     inc = run.incumbent()

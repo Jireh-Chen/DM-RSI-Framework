@@ -198,6 +198,20 @@ v3 的 q1 +0.009，v2 的 q1 −0.023，v4 的 q2 −0.013。保守的接受规�
 - 第一个模型的共识选择（滚动 + 特征 hgb 重判全部行）在第二个模型上没有显著收益，说明那个具体策略对 checkpoint 比较敏感；“拒判带 + 特征二次判断”这一类在两个模型上都稳定有效。
 - 启示（下一版）：共识应该在“策略类别”层面判断（例如按 abstain/second_stage/refit 的结构分组），而不是要求 hash 完全相同。
 
+## v7：按策略类别判断共识（2026-11-22 18:00）
+
+**改了什么**：`evolve.family(spec)` 把策略归成类别（例如 `band+hgb[feat]/max_f1/static`，不看拒判比例、种子数这些调好的数值）；
+`dpolicy consensus` 额外按类别统计各 seed 接受的 incumbent，过半的类别是共识，代表策略取该类别中接受收益最大的那个 incumbent（写入 `family_consensus.yaml`）。
+这一步只读各副本的 archive，不重新搜索。
+
+| 模型 | 类别共识 | 代表策略 |
+|---|---|---|
+| 第一个模型（第 2640 步） | `all+hgb[feat]/max_f1/rolling`（2/3），和 v6 的 hash 共识相同 | `7c06fdf9ca84`（+0.0111） |
+| 第二个模型（第 5273 步） | `band+hgb[feat]/max_f1/static`（2/3）；按 hash 没有共识 | `5889bec21334`（拒判 20% + 特征 hgb 5 种子，+0.0119） |
+
+**v7 final-test 预先登记（18:05，看第二个模型的 test 之前；按“每个版本各一次”的批准）**：`configs/long/v6t_k2_r1.yaml`（第二个模型），
+incumbent = 类别共识的代表 `5889bec21334`。第二个模型的 test 分数正在打，打完后运行，只跑这一次。
+
 ## 存储位置
 
 服务器约定见 `pipelines/elliptic_elephant/README.md`。各次 run 在 `/shared/ssd/yile/dmrsi/rsi/el_lora2g_v<版本>_r<副本>/`。
