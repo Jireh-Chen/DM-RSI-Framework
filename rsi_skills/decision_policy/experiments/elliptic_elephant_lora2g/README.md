@@ -130,7 +130,7 @@ v3 的 q1 +0.009，v2 的 q1 −0.023，v4 的 q2 −0.013。保守的接受规�
 - 候选越多，val 上的最好成绩越偏乐观（v5 每次运行 69–125 个候选），所以 final-test 才是判断依据。
 
 **v5 final-test 预先登记（15:35，看 test 之前；按“每个版本各一次 final-test”的批准）**：`configs/long/v5_it20_r0.yaml`，incumbent（仍是 baseline）
-加 r0 的领先候选 `configs/long/v5_lead_final_test.yaml`（拒判 10% + 带特征的 hgb 二次判断（9 种子平均），并在部署时用延迟 1 步的标签滚动重拟合；未被接受）。
+加 r0 的领先候选 `final_test_policies_v5_lead.yaml`（拒判 10% + 带特征的 hgb 二次判断（9 种子平均），并在部署时用延迟 1 步的标签滚动重拟合；未被接受）。
 
 **v5 final-test 结果**（test 97,756 行）：
 
@@ -144,6 +144,28 @@ v3 的 q1 +0.009，v2 的 q1 −0.023，v4 的 q2 −0.013。保守的接受规�
 - **要注意它多用了信息**：这个策略是 rolling 重拟合，在 test 上第 t 步之前，用到了第 t−1 步及更早的真实标签（标签晚 1 步到达），这模拟的是部署时有标签陆续回流。
   baseline 是静态的，从不看 test 标签。所以这个提升是“策略 + 延迟标签反馈”的组合效果，应该和团队的滚动方法（滚动重校准、滚动训练）放在一起比，不能直接说策略层本身带来了 +0.067。
 - 在 val（step_cv）上它只有 +0.0055 且 CI 跨 0，因为 val 的 5 个 step 里没有分布突变，滚动的好处体现不出来；到了有突变的 test 上才显出来。这也说明需要一个能模拟突变的评估协议，才能让接受规则在 val 上就把它选出来。
+
+## v6：部署一致的协议 + 跨 seed 共识（2026-11-22 17:20）
+
+**改了什么**：`protocol: {by: step, select_last: k}`（静态策略只在前面的 step 上拟合一次，滚动策略用晚 1 步的标签，和 final-test 的做法一致）；
+`by: step_cv` 时 `check` 和报告里给出警告；新命令 `dpolicy consensus`：同一设定的多个 seed 中，过半通过接受规则的候选才算共识选择。
+
+**为什么**：只用 val 的拆解实验（`ablation_v5lead/RESULTS.txt`）显示，v4 的 step_cv 让每个策略都按 fold 重新拟合，相当于静态 baseline 也在“滚动”，
+于是滚动策略的价值完全被抵消（滚动单独的收益恰好是 0）；在 select=33–34 的协议下，v5 领先策略（拒判 + 特征二次判断 + 滚动）3 个 seed 中有 2 个通过接受规则。
+
+**结果**（v5 的搜索设置，10 轮，3 个 seed，提案沿用 v4 的 4 个）：
+
+| 设置 | 被接受 | 接受的策略 | 共识（过半 seed 通过） |
+|---|---|---|---|
+| select = 最后 2 个 step（33–34） | **3 个 seed 都有** | r1、r2：`r1_rolling_hgb_feat_bag5`（+0.0111 [+0.0012, +0.0202]、+0.0091 [+0.0008, +0.0178]）；r0：拒判 20% + recall≥0.7 规则 + 特征 hgb（+0.0106 [+0.0017, +0.0192]，第 6 轮） | `r1_rolling_hgb_feat_bag5`（2/3） |
+| select = 最后 3 个 step（32–34） | 0 | — | 无（最好 +0.0040） |
+
+这是 RSI 第一次在 val 上自己选出并替换了 incumbent。需要如实说明两点：
+- `r1_rolling_hgb_feat_bag5` 是 v4 时写的提案，写的时候已经看过 v3 的 test 结果（“step 43 之后变差”），所以这个**方向**受过 test 的启发；但是否接受完全由 val 决定。
+- select=32–34 时没有接受：fit 只剩 30–31 两个 step，二次判断训练行太少（和 v4 里 step 32 崩掉的现象一致）。
+
+**v6 final-test 预先登记（17:40，看 test 之前；按“每个版本各一次”的批准）**：`configs/long/v6_k2_r1.yaml`，incumbent = 共识选择 `r1_rolling_hgb_feat_bag5`，
+另加 r0 的 incumbent（`final_test_policies_v6_r0_incumbent.yaml`）作为对照。
 
 ## 存储位置
 
