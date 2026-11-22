@@ -8,8 +8,16 @@ mkdir -p "$DMRSI_DATA" && cd "$DMRSI_DATA"
 
 if [ ! -x "$JEV_PYTHON" ]; then
   echo "creating the data env at $(dirname "$(dirname "$JEV_PYTHON")")"
-  python3 -m venv "$(dirname "$(dirname "$JEV_PYTHON")")"
-  "$JEV_PYTHON" -m pip install -q -r "$CFD/requirements_jev.txt"
+  # requirements_jev.txt pins pandas 3.x, which needs Python >= 3.11 (Ubuntu 22.04 ships 3.10):
+  # use the harness's pinned uv and its Python 3.11 when they are there, else the system python3.
+  UV=${OJH_TOOLS_DIR:+$OJH_TOOLS_DIR/uv/uv}
+  if [ -n "$UV" ] && [ -x "$UV" ]; then
+    "$UV" venv --python 3.11 "$(dirname "$(dirname "$JEV_PYTHON")")"
+    "$UV" pip install -q --python "$JEV_PYTHON" -r "$CFD/requirements_jev.txt"
+  else
+    python3 -m venv "$(dirname "$(dirname "$JEV_PYTHON")")"
+    "$JEV_PYTHON" -m pip install -q -r "$CFD/requirements_jev.txt"
+  fi
 fi
 
 if [ ! -f data/raw/elliptic_pp/wallets_features.csv ]; then

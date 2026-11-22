@@ -1,0 +1,6 @@
+name: p4_abstain98_logreg
+note: "errors cluster just below the threshold (0.1-0.15 bin: 48% positive): defer the 2% closest rows and re-decide them with a logreg on logit(p_cal) fitted on the band"
+calibration: {method: platt}
+decision: {rule: max_f1}
+abstain: {coverage: 0.98}
+second_stage: {enabled: true, model: logreg, apply_to: band}

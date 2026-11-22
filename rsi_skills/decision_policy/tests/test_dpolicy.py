@@ -206,3 +206,80 @@ def test_final_test_reports_f1_e2e(tmp_path, scores):
     assert out["policies"]["baseline"]["final_metric"]["name"] == "f1_e2e"
     assert "final_metric" in out["policies"]["incumbent"]["vs_baseline"]
     assert "f1_e2e" in (tmp_path / "out/final_test.md").read_text()
+
+
+def test_features_all_and_feature_space(tmp_path, scores):
+    from dpolicy.data import load_features
+    from dpolicy.evolve import Run, search_space
+    val = load_split(scores, "SYN", "val", step_from_id=True)
+    fit, sel = split_protocol(val, {"by": "step"})
+    feats = load_features(scores / "SYN_features.parquet", None)
+    spec = {"second_stage": {"enabled": True, "model": "hgb", "apply_to": "all", "features": "all"}}
+    dec, _ = run_policy(spec, fit, sel, feats)
+    assert (dec.stage == "second").all()
+    with pytest.raises(PolicyError):
+        normalize({"second_stage": {"features": "f1"}})
+    pol = tmp_path / "base.yaml"
+    pol.write_text(yaml.safe_dump({"name": "base"}))
+    base_cfg = {"run_name": "t", "out_dir": str(tmp_path / "out"), "baseline": str(pol),
+                "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True}}
+    cfg = tmp_path / "a.yaml"
+    cfg.write_text(yaml.safe_dump(base_cfg))
+    assert not any(isinstance(o, dict) and o.get("features") == "all" for o in search_space(Run(cfg))["second_stage"])
+    base_cfg["data"]["features_path"] = str(scores / "SYN_features.parquet")
+    cfg.write_text(yaml.safe_dump(base_cfg))
+    assert any(isinstance(o, dict) and o.get("features") == "all" for o in search_space(Run(cfg))["second_stage"])
+
+
+def test_noop_candidate_is_flagged(tmp_path, scores):
+    pol = tmp_path / "base.yaml"
+    pol.write_text(yaml.safe_dump({"name": "base"}))
+    cfg = tmp_path / "run.yaml"
+    cfg.write_text(yaml.safe_dump({
+        "run_name": "t", "out_dir": str(tmp_path / "out"), "baseline": str(pol), "bootstrap": {"reps": 20},
+        "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True},
+        "evolve": {"iterations": 1, "auto_candidates": 0}}))
+    (tmp_path / "out/proposals").mkdir(parents=True)
+    # isotonic is monotone: with a max-F1 cut it often keeps the same decisions; temperature always does
+    (tmp_path / "out/proposals/t.yaml").write_text(yaml.safe_dump({"name": "temp", "calibration": {"method": "temperature"}}))
+    assert main(["init", str(cfg)]) == 0 and main(["evolve", str(cfg)]) == 0
+    recs = [json.loads(l) for l in (tmp_path / "out/archive.jsonl").read_text().splitlines()]
+    assert recs[-1]["name"] == "temp" and recs[-1]["noop"] is True
+
+
+def test_bagged_second_stage_is_seed_stable(scores):
+    from dpolicy.data import load_features
+    val = load_split(scores, "SYN", "val", step_from_id=True)
+    fit, sel = split_protocol(val, {"by": "step"})
+    feats = load_features(scores / "SYN_features.parquet", None)
+    spec = {"second_stage": {"enabled": True, "model": "hgb", "apply_to": "all", "features": "all", "bags": 5}}
+    a, fa = run_policy(spec, fit, sel, feats, seed=0)
+    assert fa[0]["second_stage"]["bags"] == 5
+    b, _ = run_policy(spec, fit, sel, feats, seed=0)
+    assert (a.decision.to_numpy() == b.decision.to_numpy()).all()       # deterministic for a seed
+    assert spec_hash({"name": "x"}) == spec_hash({"name": "y"})          # bags absent: old hashes unchanged
+    with pytest.raises(PolicyError):
+        normalize({"second_stage": {"bags": 0}})
+
+
+def test_step_cv_scores_each_step_out_of_time(tmp_path, scores):
+    from dpolicy.data import step_cv_folds
+    from dpolicy.evolve import Run
+    val = load_split(scores, "SYN", "val", step_from_id=True)
+    folds = step_cv_folds(val, {"by": "step_cv", "cv_steps": 3})
+    assert len(folds) == 3 and all(f.step.max() < s.step.min() for f, s in folds)
+    pol = tmp_path / "base.yaml"
+    pol.write_text(yaml.safe_dump({"name": "base"}))
+    cfg = tmp_path / "run.yaml"
+    cfg.write_text(yaml.safe_dump({"run_name": "t", "out_dir": str(tmp_path / "out"), "baseline": str(pol),
+                                   "protocol": {"by": "step_cv", "cv_steps": 3},
+                                   "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True}}))
+    run = Run(cfg)
+    assert len(run.fit) + len(run.select) == len(val)
+    dec, fits = run.decide({"name": "b"})
+    assert sorted(dec.id) == sorted(run.select.id) and [f["fold_step"] for f in fits] == sorted(run.select.step.unique())
+    # a fold's decisions never depend on labels of its own or later steps
+    last = run.select.step.max()
+    run.folds = [(f, s.assign(y=1 - s.y) if s.step.iloc[0] == last else s) for f, s in run.folds]
+    dec2, _ = run.decide({"name": "b"})
+    assert (dec.set_index("id").decision == dec2.set_index("id").decision).all()

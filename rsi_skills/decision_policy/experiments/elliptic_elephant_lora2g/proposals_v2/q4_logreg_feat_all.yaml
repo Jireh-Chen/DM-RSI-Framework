@@ -1,0 +1,3 @@
+name: q4_logreg_feat_all
+note: "linear control for q1: does a simple model on logit(p) + features add anything, or is the gain (if any) from hgb interactions"
+second_stage: {enabled: true, model: logreg, apply_to: all, features: all}

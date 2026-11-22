@@ -36,8 +36,12 @@ def matrix(ids, p_cal, features: pd.DataFrame | None) -> np.ndarray:
 
 
 class SecondStage:
-    def __init__(self, model: str = "logreg", rule: str = "max_f1", seed: int = 0, **rule_kw):
-        self.model_name, self.rule, self.rule_kw, self.seed = model, rule, rule_kw, seed
+    """``bags`` > 1 (v3): average ``bags`` models and ``bags`` out-of-fold passes, each with its own seed and fold
+    split. One model's decisions moved F1 by ~0.006 between seeds on Elliptic select rows (v2 replicates), as much as
+    the gain being measured; averaging makes the second stage a property of the data, not of the seed."""
+
+    def __init__(self, model: str = "logreg", rule: str = "max_f1", seed: int = 0, bags: int = 1, **rule_kw):
+        self.model_name, self.rule, self.rule_kw, self.seed, self.bags = model, rule, rule_kw, seed, max(1, int(bags))
         self.model = None
         self.threshold = None
         self.skipped: str | None = None
@@ -49,10 +53,11 @@ class SecondStage:
             return self
         if self.model_name != "hgb":  # HGB handles NaN natively
             X = np.nan_to_num(X)
-        cv = StratifiedKFold(5, shuffle=True, random_state=self.seed)
-        oof = cross_val_predict(_model(self.model_name, self.seed), X, y, cv=cv, method="predict_proba")[:, 1]
+        seeds = [self.seed + 1000 * b for b in range(self.bags)]
+        oof = np.mean([cross_val_predict(_model(self.model_name, s), X, y, method="predict_proba",
+                                         cv=StratifiedKFold(5, shuffle=True, random_state=s))[:, 1] for s in seeds], axis=0)
         self.threshold = choose_threshold(oof, y, self.rule, **self.rule_kw)["threshold"]
-        self.model = _model(self.model_name, self.seed).fit(X, y)
+        self.model = [_model(self.model_name, s).fit(X, y) for s in seeds]
         return self
 
     def predict(self, X):
@@ -60,8 +65,8 @@ class SecondStage:
             return None
         if self.model_name != "hgb":
             X = np.nan_to_num(X)
-        q = self.model.predict_proba(X)[:, 1]
+        q = np.mean([m.predict_proba(X)[:, 1] for m in self.model], axis=0)
         return q, (q >= self.threshold).astype(int)
 
     def describe(self) -> dict:
-        return {"model": self.model_name, "threshold": self.threshold, "skipped": self.skipped}
+        return {"model": self.model_name, "bags": self.bags, "threshold": self.threshold, "skipped": self.skipped}

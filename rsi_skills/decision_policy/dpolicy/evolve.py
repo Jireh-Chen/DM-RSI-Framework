@@ -19,7 +19,7 @@ import pandas as pd
 import yaml
 
 from dpolicy.bootstrap import paired_diff
-from dpolicy.data import load_features, load_split, split_protocol
+from dpolicy.data import load_features, load_split, split_protocol, step_cv_folds
 from dpolicy.diagnose import diagnose, to_markdown
 from dpolicy.metrics import dec_metrics, objective, resolve
 from dpolicy.policy import PolicyError, normalize, run_policy, spec_hash
@@ -39,6 +39,31 @@ DEFAULT_SPACE = {
     "*": [{"abstain": {"coverage": c}, "second_stage": {"enabled": True, "model": m, "apply_to": "band"}}
           for c in (0.9, 0.8, 0.7) for m in ("logreg", "hgb")],
 }
+
+
+# With data.features_path the second stage can see information the score does not have; on logit(p) alone it is a
+# monotone re-map of the same score and cannot change the ranking. These variants join the space only then (v2).
+FEATURE_SPACE = {
+    "second_stage": [{"enabled": True, "model": "hgb", "apply_to": "all", "features": "all"},
+                     {"enabled": True, "model": "logreg", "apply_to": "all", "features": "all"}],
+    "*": [{"abstain": {"coverage": c}, "second_stage": {"enabled": True, "model": "hgb", "apply_to": "band",
+                                                         "features": "all"}} for c in (0.95, 0.9, 0.8)],
+}
+
+
+def search_space(run) -> dict:
+    ev = run.cfg.get("evolve", {})
+    space = copy.deepcopy(ev.get("search_space") or DEFAULT_SPACE)
+    if run.features is not None and ev.get("feature_space", True):
+        bags = int(ev.get("second_stage_bags", 1))   # v3: bagged feature second stages in the auto space
+        for k, opts in FEATURE_SPACE.items():
+            opts = copy.deepcopy(opts)
+            for o in opts:
+                ss = o.get("second_stage", o) if k == "*" else o
+                if bags > 1:
+                    ss["bags"] = bags
+            space[k] = list(space.get(k, [])) + opts
+    return space
 
 
 def _merge(base: dict, patch: dict) -> dict:
@@ -98,7 +123,15 @@ class Run:
         self.accept = self.cfg.get("accept", {"min_lo": 0.0})
         self.seed = int(self.cfg.get("evolve", {}).get("seed", 0))
         val = load_split(self.scores_dir, d["name"], d.get("val_split", "val"), step_from_id=d.get("step_from_id", False))
-        self.fit, self.select = split_protocol(val, self.cfg.get("protocol", {"by": "step"}))
+        proto = self.cfg.get("protocol", {"by": "step"})
+        self.folds = None
+        if proto.get("by") == "step_cv":
+            self.folds = step_cv_folds(val, proto)
+            first = self.folds[0][1]["step"].iloc[0]
+            self.fit = val[val["step"] < first].reset_index(drop=True)              # rows no fold ever scores
+            self.select = pd.concat([sel for _, sel in self.folds], ignore_index=True)
+        else:
+            self.fit, self.select = split_protocol(val, proto)
         fp = d.get("features_path")
         self.features = load_features(base / Path(fp).expanduser(), d.get("feature_columns")) if fp else None
         self.archive_path = self.out / "archive.jsonl"
@@ -128,6 +161,13 @@ class Run:
         return spec
 
     def decide(self, spec: dict, fit=None, target=None):
+        if self.folds is not None and fit is None and target is None:   # step_cv: pool out-of-time folds
+            parts, fits = [], []
+            for f, sel in self.folds:
+                d, fi = run_policy(spec, f, sel, self.features, seed=self.seed)
+                parts.append(d)
+                fits.append({"fold_step": int(sel["step"].iloc[0]), "fits": fi})
+            return pd.concat(parts, ignore_index=True), fits
         return run_policy(spec, self.fit if fit is None else fit, self.select if target is None else target,
                           self.features, seed=self.seed)
 
@@ -142,6 +182,8 @@ class Run:
                "spec": spec, "metrics": m, "objective": objective(m, self.obj),
                "fits": fits if len(fits) <= 3 else fits[:1] + [f"... {len(fits) - 1} more per-step fits"]}
         if incumbent_dec is not None:
+            # same decisions as the incumbent on every select row: a no-op, whatever its spec says (v2)
+            rec["noop"] = bool(np.array_equal(obj_decisions(dec, self.obj), obj_decisions(incumbent_dec, self.obj)))
             steps = dec["step"].to_numpy() if "step" in dec.columns else None
             rec["vs_incumbent"] = paired_diff(dec.y.to_numpy(), obj_decisions(dec, self.obj), obj_decisions(incumbent_dec, self.obj),
                                               self.obj, self.costs, steps=steps, reps=int(self.boot.get("reps", 1000)),
@@ -229,7 +271,7 @@ def mutate(spec: dict, space: dict, rng: random.Random, tries: int = 20) -> dict
 
 def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
     """Returns the records accepted as new incumbents."""
-    space = run.cfg.get("evolve", {}).get("search_space") or DEFAULT_SPACE
+    space = search_space(run)
     rng = random.Random(run.seed)
     min_lo = float(run.accept.get("min_lo", 0.0))
     seen = {r["hash"] for r in run.archive()}
@@ -275,7 +317,7 @@ def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
             if rec["passes_accept"] and (best is None or v["diff"] > best["vs_incumbent"]["diff"]):
                 best = rec
             log(f"iteration {it}: {rec['hash']} {str(rec['name']):<28} obj {rec['objective']:.4f} "
-                f"diff {_ci(v)}{'  PASS' if rec['passes_accept'] else ''}")
+                f"diff {_ci(v)}{'  PASS' if rec['passes_accept'] else ''}{'  (no-op: same decisions)' if rec.get('noop') else ''}")
         if best is not None:
             best["accepted"] = True
         for rec in recs:
@@ -298,7 +340,8 @@ def write_report(run: Run) -> Path:
              f"- protocol: {run.cfg.get('protocol')}; fit rows {len(run.fit):,} (pos {int(run.fit.y.sum()):,}), "
              f"select rows {len(run.select):,} (pos {int(run.select.y.sum()):,})",
              f"- objective: {run.obj}; costs: {run.costs}; accept: paired {run.boot.get('level', 0.95):.0%} CI lower bound > {run.accept.get('min_lo', 0.0)}",
-             f"- candidates evaluated on the select rows: {len(recs)}. The more candidates are compared, the more the best "
+             f"- candidates evaluated on the select rows: {len(recs)} ({sum(bool(r.get('noop')) for r in recs)} no-ops with the "
+             "incumbent's exact decisions). The more candidates are compared, the more the best "
              "one's select score is optimistic: only `dpolicy final-test` (refit on all val, applied once to test) is an unbiased estimate.",
              ""]
     if inc:

@@ -1,0 +1,28 @@
+# Elephant-1 LoRA on 2 GPUs (DDP), kept in this repo so onejev-harness stays untouched; pass it with
+#   $OJH run <workspace>/exp.yaml --base elephant-1 --gpus i,j --recipe $DMRSI_REPO/pipelines/elliptic_elephant/recipes/elephant_lora_ddp_2g.yaml
+# Why: full fine-tuning of elephant-1 needs 72.5 GB/rank of fp32 weights+grads+AdamW on 2 cards and OOMs on
+# 80 GB A100s (2026-11-21). Shape follows the harness's examples/recipes/mammoth_lora_ddp.yaml (OneJev's
+# --fsdp is full fine-tune only, so LoRA runs under DDP); data/loss settings follow elephant_full_fsdp.yaml
+# (brier_weight 1, max_rows 8) so only the training method differs. Hyperparameters are not tuned.
+# LoRA results are reported separately from the team's full fine-tunes, never in the same comparison.
+mode: lora
+gpus: 2
+onejev:
+  split: train
+  dtype: bfloat16
+  lr: 1.0e-5
+  epochs: 1
+  brier_weight: 1
+  warmup_frac: 0.03
+  weight_decay: 0
+  max_grad_norm: 1
+  max_len: 16384
+  batch_tokens: 16384
+  max_rows: 8
+  accum_rows: 32
+  log_every: 1
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  autocast: true
