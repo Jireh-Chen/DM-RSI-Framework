@@ -269,10 +269,66 @@ def mutate(spec: dict, space: dict, rng: random.Random, tries: int = 20) -> dict
     return None
 
 
+def mutate_continuous(spec: dict, rng: random.Random, features: bool) -> dict | None:
+    """v5: one numeric change drawn from a range instead of a fixed list, so the search does not run dry when the
+    incumbent stays put (v1-v4 stopped after 5-10 rounds whatever `iterations` said)."""
+    base = normalize(spec)
+    ss, ab, dec, rf = base["second_stage"], base["abstain"], base["decision"], base["refit"]
+    ops = ["band"]
+    if dec["rule"] in ("precision_at", "recall_at"):
+        ops.append("target")
+    if dec["rule"] == "top_frac":
+        ops.append("frac")
+    if rf["mode"] == "rolling":
+        ops.append("window")
+    if ss["enabled"]:
+        ops.append("bags")
+    op = rng.choice(ops)
+    new = copy.deepcopy(base)
+    if op == "band":       # abstain band of random width, re-decided by a second stage (features when there are some)
+        new["abstain"]["coverage"] = round(rng.uniform(0.70, 0.995), 3)
+        if not ss["enabled"]:
+            new["second_stage"].update({"enabled": True, "model": "hgb", "apply_to": "band",
+                                        "features": "all" if features else []})
+        elif ss["apply_to"] == "all":
+            new["second_stage"]["apply_to"] = "band"
+    elif op == "target":
+        new["decision"]["target"] = round(rng.uniform(0.5, 0.95), 3)
+    elif op == "frac":
+        new["decision"]["frac"] = round(rng.uniform(0.01, 0.2), 3)
+    elif op == "window":
+        new["refit"]["window"] = rng.choice([1, 2, 3, 4, None])
+    elif op == "bags":
+        new["second_stage"]["bags"] = rng.choice([1, 3, 5, 9])
+    try:
+        new = normalize(new)
+    except PolicyError:
+        return None
+    if spec_hash(new) == spec_hash(base):
+        return None
+    new["parent"], new["name"] = spec_hash(base), f"auto~:{op}"
+    return new
+
+
+def parents(run: Run, inc: dict, k: int) -> list[dict]:
+    """v5: the incumbent plus the k-1 best other candidates so far (finite objective, not a no-op), best first."""
+    out, seen = [inc], {spec_hash(run.prepare(inc))}
+    for r in sorted(run.archive(), key=lambda r: -num(r["objective"])):
+        if len(out) >= k:
+            break
+        if r["hash"] in seen or r.get("noop") or not np.isfinite(num(r["objective"])):
+            continue
+        out.append(r["spec"])
+        seen.add(r["hash"])
+    return out
+
+
 def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
     """Returns the records accepted as new incumbents."""
     space = search_space(run)
     rng = random.Random(run.seed)
+    ev = run.cfg.get("evolve", {})
+    k_par, cont = int(ev.get("parents", 1)), bool(ev.get("continuous", False))   # v5; defaults = v4 behaviour
     min_lo = float(run.accept.get("min_lo", 0.0))
     seen = {r["hash"] for r in run.archive()}
     start = max([r["iteration"] for r in run.archive()] + [0])
@@ -294,8 +350,14 @@ def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
                 s.setdefault("parent", spec_hash(run.prepare(inc)))
                 cands.append(("proposal", s))
                 seen.add(spec_hash(s))
+        pars = parents(run, inc, k_par) if k_par > 1 else [inc]
         for _ in range(auto):
-            m = mutate(inc, space, rng)
+            if k_par == 1 and not cont:
+                m = mutate(inc, space, rng)          # v1-v4 path: same random draws, same archive
+            else:
+                par = pars[rng.randrange(len(pars))]
+                m = (mutate_continuous(par, rng, run.features is not None) if cont and rng.random() < 0.5
+                     else mutate(par, space, rng))
             if m is not None and spec_hash(m) not in seen:
                 cands.append(("auto", m))
                 seen.add(spec_hash(m))

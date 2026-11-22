@@ -283,3 +283,24 @@ def test_step_cv_scores_each_step_out_of_time(tmp_path, scores):
     run.folds = [(f, s.assign(y=1 - s.y) if s.step.iloc[0] == last else s) for f, s in run.folds]
     dec2, _ = run.decide({"name": "b"})
     assert (dec.set_index("id").decision == dec2.set_index("id").decision).all()
+
+
+def test_v5_population_search_runs_every_round(tmp_path, scores):
+    import random
+    from dpolicy.evolve import mutate_continuous
+    got = [mutate_continuous({"name": "b"}, random.Random(i), features=False) for i in range(20)]
+    got = [g for g in got if g is not None]
+    assert got and all(0.70 <= g["abstain"]["coverage"] <= 0.995 and g["second_stage"]["enabled"] for g in got)
+    pol = tmp_path / "base.yaml"
+    pol.write_text(yaml.safe_dump({"name": "base"}))
+    base = {"run_name": "t", "baseline": str(pol), "bootstrap": {"reps": 20},
+            "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True}}
+    for tag, ev in (("v4", {"iterations": 12, "auto_candidates": 3, "seed": 0}),
+                    ("v5", {"iterations": 12, "auto_candidates": 3, "seed": 0, "parents": 3, "continuous": True})):
+        cfg = tmp_path / f"{tag}.yaml"
+        cfg.write_text(yaml.safe_dump({**base, "out_dir": str(tmp_path / tag), "evolve": ev}))
+        assert main(["init", str(cfg)]) == 0 and main(["evolve", str(cfg)]) == 0
+    rounds = {tag: {json.loads(l)["iteration"] for l in (tmp_path / tag / "archive.jsonl").read_text().splitlines()} - {0}
+              for tag in ("v4", "v5")}
+    assert rounds["v5"] == set(range(1, 13))          # the population search never runs dry
+    assert len(rounds["v4"]) < 12                       # single-step mutations of a fixed incumbent do
