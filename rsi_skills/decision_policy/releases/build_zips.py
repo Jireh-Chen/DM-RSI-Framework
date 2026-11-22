@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SKILL = "rsi_skills/decision_policy"
 OUT = ROOT / SKILL / "releases"
 # each version's dpolicy/, SKILL.md, reference/ and tests/: history/v<N>/ for old versions, the skill dir for the latest
-SRC = {1: f"{SKILL}/history/v1", 2: f"{SKILL}/history/v2", 3: f"{SKILL}/history/v3", 4: SKILL}
+SRC = {1: f"{SKILL}/history/v1", 2: f"{SKILL}/history/v2", 3: f"{SKILL}/history/v3", 4: f"{SKILL}/history/v4", 5: SKILL}
 PIPE = ["pipelines/elliptic_elephant/env.example.sh", "pipelines/elliptic_elephant/02b_merge_lora.py",
         "pipelines/elliptic_elephant/03_score_checkpoint.sh", "pipelines/elliptic_elephant/05_check_merged.py",
         "pipelines/gpu_queue.sh"]
@@ -36,7 +36,8 @@ COMMON = [f"{SKILL}/pyproject.toml", f"{SKILL}/configs/demo_synthetic.yaml", f"{
 TITLE = {1: "v1（1.0.0）：校准、阈值、拒判、logit 二次判断、rolling、bootstrap 接受规则",
          2: "v2（2.0.0）：v1 + 二次判断用特征表（features: all）、no-op 标记",
          3: "v3（3.0.0，推荐）：v2 + 二次判断多种子平均（bags）",
-         4: "v4（4.0.0）：v3 + 时间外 step CV 协议（by: step_cv）"}
+         4: "v4（4.0.0）：v3 + 时间外 step CV 协议（by: step_cv）",
+         5: "v5（5.0.0）：v4 + 种群式搜索（evolve.parents、evolve.continuous）"}
 
 
 def guide(v: int, files: list[str]) -> str:
@@ -91,6 +92,6 @@ def build(v: int) -> Path:
 
 
 if __name__ == "__main__":
-    for v in (int(a) for a in (sys.argv[1:] or ["1", "2", "3", "4"])):
+    for v in (int(a) for a in (sys.argv[1:] or [str(k) for k in sorted(SRC)])):
         p = build(v)
         print(f"{p.relative_to(ROOT)}  {p.stat().st_size / 1024:.0f} KB")

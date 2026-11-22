@@ -5,7 +5,8 @@
 | zip | 版本 | 内容 | 建议 |
 |---|---|---|---|
 | [`decision_policy_v3.zip`](decision_policy_v3.zip) | v3（3.0.0） | v2 + 二次判断多种子平均 | **推荐**：test 上唯一显著提升的版本（领先提案 +0.0086） |
-| [`decision_policy_v4.zip`](decision_policy_v4.zip) | v4（4.0.0） | v3 + 时间外 step CV 协议 | v3 的超集；需要更严格地检查稳健性时用 |
+| [`decision_policy_v5.zip`](decision_policy_v5.zip) | v5（5.0.0） | v4 + 种群式搜索（真正能迭代 10/20 轮） | 最新；想多轮搜索时用 |
+| [`decision_policy_v4.zip`](decision_policy_v4.zip) | v4（4.0.0） | v3 + 时间外 step CV 协议 | 需要更严格地检查稳健性时用 |
 | [`decision_policy_v2.zip`](decision_policy_v2.zip) | v2（2.0.0） | v1 + 特征二次判断、no-op 标记 | 复现用 |
 | [`decision_policy_v1.zip`](decision_policy_v1.zip) | v1（1.0.0） | 校准、阈值、拒判、logit 二次判断、rolling | 复现用 |
 

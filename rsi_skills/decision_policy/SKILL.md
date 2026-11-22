@@ -3,7 +3,7 @@ name: decision-policy-rsi
 description: Use when a trained decision model's scores (val/test parquet with id, y, p) must be turned into better decisions without retraining — evaluate the current decision policy, diagnose failures, and evolve thresholds, calibration, abstention/deferral or a lightweight second-stage model, then compare against the old policy. 决策策略自进化：阈值、校准、拒判、二次判断、诊断失败 case、新旧策略对比。
 ---
 
-# Decision Policy RSI（Skill v4，`dpolicy` 4.0.0）
+# Decision Policy RSI（Skill v5，`dpolicy` 5.0.0）
 
 版本历史、各版本的功能和实验结果见 `VERSIONS.md`；历史版本的代码在 `history/v<N>/`。
 
@@ -47,6 +47,7 @@ p ──► 校准（none | platt | temperature | isotonic）
    - 只有收益 CI 下界 > `accept.min_lo` 时才替换 incumbent；
    - 全部记入 `archive.jsonl`，并重写 `report.md`。
 7. **读 `report.md` 和新 incumbent 的 diagnosis，回到第 4 步。** 每轮都重新诊断、重新写提案，不要只靠自动变异（自动变异在 incumbent 不变时很快就重复，`evolve.log` 里会标出决策与 incumbent 完全相同的 no-op）。
+   多轮搜索（v5）：`evolve: {parents: 4, continuous: true}` 让每轮都有新候选（否则 incumbent 不变时 5–10 轮就会停）；收益通常在 5–6 轮后停住，10 轮够用。
    稳定性：同一配置只改 `evolve.seed` 跑 3 个副本，看领先提案的 F1 波动；波动和收益同量级时，用 `second_stage.bags: 5`。
    停止条件（任一满足）：连续 2 轮没有候选被接受；候选总数达到用户给的预算（默认 30）；诊断里剩下的都是"需要重新训练"类的问题。
 8. **最终测试（必须先问用户）。** 跑 `python -m dpolicy final-test <config> --allow-test`：baseline 和 incumbent 都在全部 val 上重拟合，在 test 上**只跑一次**，结果写入 `final_test.json`（含 pre43/post43 子集）。重跑需要 `--again`，也要先得到用户同意。
