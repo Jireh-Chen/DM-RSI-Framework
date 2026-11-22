@@ -3,7 +3,7 @@ name: decision-policy-rsi
 description: Use when a trained decision model's scores (val/test parquet with id, y, p) must be turned into better decisions without retraining — evaluate the current decision policy, diagnose failures, and evolve thresholds, calibration, abstention/deferral or a lightweight second-stage model, then compare against the old policy. 决策策略自进化：阈值、校准、拒判、二次判断、诊断失败 case、新旧策略对比。
 ---
 
-# Decision Policy RSI（Skill v6，`dpolicy` 6.0.0）
+# Decision Policy RSI（Skill v7，`dpolicy` 7.0.0）
 
 版本历史、各版本的功能和实验结果见 `VERSIONS.md`；历史版本的代码在 `history/v<N>/`。
 
@@ -65,6 +65,7 @@ p ──► 校准（none | platt | temperature | isotonic）
 
 - 分数校准良好时（ECE < 0.01），校准、阈值规则、滚动阈值几乎没有收益；能带来收益的是**有新信息**的二次判断（特征）。
 - val 只有少数几个 step，而且都在分布突变之前，在它上面挑出的领先提案到了 test 上时好时坏。保守的接受规则（CI 下界 > 0）是对的，不要为了“有进展”去放宽它。
+- val 上的接受（即使跨 seed、跨类别达成共识）在 Elliptic 上不能稳定预测 test（v7：val +0.012、test −0.020）；只有“滚动 + 延迟标签”在 test 上大幅为正。汇报时把这一点说在前面。
 - 汇报时同时给出：每个版本的副本数、候选数、no-op 数、被接受数、每副本耗时，以及 final-test 的 pre43/post43。
 
 ## 规则

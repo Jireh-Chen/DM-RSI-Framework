@@ -14,6 +14,7 @@ PYTHONPATH=$PWD/history/v1 python -P -m dpolicy check <config>   # -P（Python �
 | `v3/` | 3.0.0 | v3 的实验结果写完时的 `dpolicy/` | v2 + 二次判断多种子平均（`bags`） |
 | `v4/` | 4.0.0 | v5 开发开始时的 `dpolicy/` | v3 + 时间外 step CV 协议（`by: step_cv`） |
 | `v5/` | 5.0.0 | v6 开发开始时的 `dpolicy/` | v4 + 种群式搜索（`evolve.parents`、`evolve.continuous`） |
-| 当前 `../dpolicy/` | 6.0.0 | — | v5 + `select_last` 协议、step_cv 警告、跨 seed 共识（`dpolicy consensus`） |
+| `v6/` | 6.0.0 | v7 开发开始时的 `dpolicy/` | v5 + `select_last` 协议、step_cv 警告、跨 seed 共识（`dpolicy consensus`） |
+| 当前 `../dpolicy/` | 7.0.0 | — | v6 + 按策略类别判断共识 |
 
 快照只用于复现和对比，不再修改。各版本的功能和实验结果见 [`../VERSIONS.md`](../VERSIONS.md)。
