@@ -167,6 +167,20 @@ v3 的 q1 +0.009，v2 的 q1 −0.023，v4 的 q2 −0.013。保守的接受规�
 **v6 final-test 预先登记（17:40，看 test 之前；按“每个版本各一次”的批准）**：`configs/long/v6_k2_r1.yaml`，incumbent = 共识选择 `r1_rolling_hgb_feat_bag5`，
 另加 r0 的 incumbent（`final_test_policies_v6_r0_incumbent.yaml`）作为对照。
 
+**v6 final-test 结果**（test 97,756 行）：
+
+| 策略 | f1_e2e | precision | recall | pre43 F1 | post43 F1 | 相对 baseline [95% CI] |
+|---|---|---|---|---|---|---|
+| baseline | 0.6102 | 0.6654 | 0.5634 | 0.7250 | 0.4262 | — |
+| **incumbent = 共识选择 `r1_rolling_hgb_feat_bag5`（RSI 在 val 上接受）** | **0.7014** | 0.7843 | 0.6343 | 0.7914 | **0.5685** | **+0.0912 [+0.0829, +0.0997]** |
+| r0 的 incumbent（静态：拒判 20% + recall≥0.7 + 特征 hgb） | 0.6433 | 0.7413 | 0.5682 | 0.7653 | 0.4435 | +0.0331 [+0.0269, +0.0393] |
+
+读法：
+- 这是第一次由 RSI 自己在 val 上接受、再在 test 上验证的结果：F1 从 0.610 到 0.701，post43（分布突变之后）从 0.426 到 0.569。
+- 共识选择是**滚动**策略：在 test 上，第 t 步用到了 t−1 步及以前的真实标签（晚 1 步到达），模拟部署时标签陆续回流；baseline 是静态的。
+  所以它和静态 baseline 的差包含了“延迟标签反馈”的价值，最公平的对照是团队的滚动方法（滚动重校准、滚动训练）。
+- 不用 test 标签的静态 incumbent（r0）也显著提升了 +0.033，这部分完全来自策略层（拒判带 + 特征二次判断）。
+
 ## 存储位置
 
 服务器约定见 `pipelines/elliptic_elephant/README.md`。各次 run 在 `/shared/ssd/yile/dmrsi/rsi/el_lora2g_v<版本>_r<副本>/`。

@@ -3,7 +3,7 @@ name: decision-policy-rsi
 description: Use when a trained decision model's scores (val/test parquet with id, y, p) must be turned into better decisions without retraining — evaluate the current decision policy, diagnose failures, and evolve thresholds, calibration, abstention/deferral or a lightweight second-stage model, then compare against the old policy. 决策策略自进化：阈值、校准、拒判、二次判断、诊断失败 case、新旧策略对比。
 ---
 
-# Decision Policy RSI（Skill v5，`dpolicy` 5.0.0）
+# Decision Policy RSI（Skill v6，`dpolicy` 6.0.0）
 
 版本历史、各版本的功能和实验结果见 `VERSIONS.md`；历史版本的代码在 `history/v<N>/`。
 
@@ -37,6 +37,8 @@ p ──► 校准（none | platt | temperature | isotonic）
 1. **定目标。** 最终评估固定用 `final_metric: f1_e2e`：全部行上的 F1，被拒判的行由二次判断决定，没有二次判断时回退到阈值，和团队口径一致。RSI 过程中用来比较候选的 `objective.metric` 可以换成别的指标，例如 `f1`（只算被接受的行，配合 `min_coverage`）、`cost_e2e`、`recall_e2e`。用户没说就用 `f1_e2e`。目标一旦定下，整个 run 都不改；要改就开一个新 `run_name`。
    - 拒判是好事的条件：被接受行的 F1（`f1_accepted`）提高，同时被拒判的大多是一阶段会判错的行（`first_err_rate_deferred` 远高于 `first_err_rate_accepted`）。被拒判的行要交给二次判断（`second_stage.apply_to: band`），整体 `f1_e2e` 才会变。只拒判不做二次判断时，`f1_e2e` 不变。
 2. **检查数据和协议。** 跑 `python -m dpolicy check <config>`，确认 fit 和 select 的行数、正例数、step。默认协议 `by: step` 用 val 的前 60% 个 step 拟合，后 40% 比较候选，模拟"拟合用过去，用在未来"。
+   **推荐（v6）**：`protocol: {by: step, select_last: 2}`：静态策略只拟合一次、滚动策略用晚到的标签，和 final-test 的做法一致。
+   `by: step_cv`（v4）会让每个策略都按 fold 重拟合，滚动和静态分不出来，`check` 会给出警告；只在专门检查“训练行变少时会不会崩”时用。
    val 的 step 少（Elliptic 只有 5 个）时用 `by: step_cv`（v4）：最后 k 个 step 各自只用更早的 step 拟合，合起来比较，能看出策略在训练行少、时间段变化时会不会崩。
 3. **评估基线。** 跑 `python -m dpolicy init <config>`：基线策略（`configs/policies/baseline_f1.yaml`，等于团队现在的做法）成为 incumbent。然后读 `<out>/eval/<hash>/diagnosis.md`。
 4. **诊断。** 用 3–5 句话写下当前策略的问题，每条带证据（数字、step、典型 case）。`findings` 到进化方向的对应关系见 `reference/diagnosis_playbook.md`。
@@ -48,6 +50,7 @@ p ──► 校准（none | platt | temperature | isotonic）
    - 全部记入 `archive.jsonl`，并重写 `report.md`。
 7. **读 `report.md` 和新 incumbent 的 diagnosis，回到第 4 步。** 每轮都重新诊断、重新写提案，不要只靠自动变异（自动变异在 incumbent 不变时很快就重复，`evolve.log` 里会标出决策与 incumbent 完全相同的 no-op）。
    多轮搜索（v5）：`evolve: {parents: 4, continuous: true}` 让每轮都有新候选（否则 incumbent 不变时 5–10 轮就会停）；收益通常在 5–6 轮后停住，10 轮够用。
+   接受要看共识（v6）：同一配置只改 `evolve.seed` 跑 3 个副本，再跑 `python -m dpolicy consensus <cfg_r0> <cfg_r1> <cfg_r2>`，过半通过的才算数；final-test 测共识选择。
    稳定性：同一配置只改 `evolve.seed` 跑 3 个副本，看领先提案的 F1 波动；波动和收益同量级时，用 `second_stage.bags: 5`。
    停止条件（任一满足）：连续 2 轮没有候选被接受；候选总数达到用户给的预算（默认 30）；诊断里剩下的都是"需要重新训练"类的问题。
 8. **最终测试（必须先问用户）。** 跑 `python -m dpolicy final-test <config> --allow-test`：baseline 和 incumbent 都在全部 val 上重拟合，在 test 上**只跑一次**，结果写入 `final_test.json`（含 pre43/post43 子集）。重跑需要 `--again`，也要先得到用户同意。
