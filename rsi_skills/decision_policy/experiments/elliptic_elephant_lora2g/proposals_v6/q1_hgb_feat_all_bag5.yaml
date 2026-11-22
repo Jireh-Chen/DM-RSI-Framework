@@ -1,0 +1,3 @@
+name: q1_hgb_feat_all_bag5
+note: "v2 showed this candidate moves 0.005-0.006 between seeds (as much as its gain); bag 5 seeds. confident_errors (39 FN with p<0.05): the score alone cannot fix them; an hgb on [logit(p), 24 address/transaction features] re-decides every row, threshold chosen out-of-fold on fit rows"
+second_stage: {enabled: true, model: hgb, apply_to: all, features: all, bags: 5}

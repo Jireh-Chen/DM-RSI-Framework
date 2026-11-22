@@ -1,0 +1,4 @@
+name: a6_all_hgb_bag9_rolling
+note: "second stage on all rows instead of the band, with rolling refit"
+second_stage: {enabled: true, model: hgb, apply_to: all, features: all, bags: 9}
+refit: {mode: rolling, delay: 1, window: null}

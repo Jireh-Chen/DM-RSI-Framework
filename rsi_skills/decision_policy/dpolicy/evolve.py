@@ -394,6 +394,37 @@ def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
     return accepted
 
 
+STEP_CV_WARNING = ("protocol by: step_cv refits every policy on all earlier steps for each fold, so a static policy is "
+                   "compared as if it were refit every step, while final-test fits it once; rolling and static refits "
+                   "cannot be told apart. For a deployment-faithful comparison use by: step with select_last (v6).")
+
+
+def protocol_warnings(run) -> list[str]:
+    return [STEP_CV_WARNING] if run.folds is not None else []
+
+
+def consensus(runs: list, min_share: float = 0.5) -> list[dict]:
+    """v6: one row per candidate (by hash) evaluated in several replicate runs of the same set-up (different seeds):
+    in how many it passed the acceptance rule, and its mean gain. A candidate that passes in > min_share of the
+    replicates is a *consensus* pick; a single seed's pass is not enough when seeds alone move F1 by ~0.005."""
+    by = {}
+    for run in runs:
+        for r in run.archive():
+            if r.get("source") == "baseline" or not r.get("vs_incumbent"):
+                continue
+            e = by.setdefault(r["hash"], {"hash": r["hash"], "name": r["name"], "spec": r["spec"], "runs": 0,
+                                          "passed": 0, "gains": []})
+            e["runs"] += 1
+            e["passed"] += bool(r.get("passes_accept"))
+            e["gains"].append(num(r["vs_incumbent"]["diff"]))
+    out = []
+    for e in by.values():
+        e["mean_gain"] = float(np.mean(e["gains"]))
+        e["consensus"] = e["runs"] == len(runs) and e["passed"] > min_share * len(runs)
+        out.append(e)
+    return sorted(out, key=lambda e: (-e["passed"], -e["mean_gain"]))
+
+
 def write_report(run: Run) -> Path:
     recs = run.archive()
     inc = run.incumbent()
@@ -401,6 +432,7 @@ def write_report(run: Run) -> Path:
              f"- scores: `{run.scores_dir}` / `{run.cfg['data']['name']}`",
              f"- protocol: {run.cfg.get('protocol')}; fit rows {len(run.fit):,} (pos {int(run.fit.y.sum()):,}), "
              f"select rows {len(run.select):,} (pos {int(run.select.y.sum()):,})",
+             *[f"- WARNING: {w}" for w in protocol_warnings(run)],
              f"- objective: {run.obj}; costs: {run.costs}; accept: paired {run.boot.get('level', 0.95):.0%} CI lower bound > {run.accept.get('min_lo', 0.0)}",
              f"- candidates evaluated on the select rows: {len(recs)} ({sum(bool(r.get('noop')) for r in recs)} no-ops with the "
              "incumbent's exact decisions). The more candidates are compared, the more the best "

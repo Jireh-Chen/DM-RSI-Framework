@@ -68,7 +68,8 @@ def split_protocol(val: pd.DataFrame, protocol: dict) -> tuple[pd.DataFrame, pd.
     *select* part (candidates are compared here).
 
     protocol:
-      by: step          -> select = rows whose step is in ``select_steps`` (default: the last
+      by: step          -> select = rows whose step is in ``select_steps`` (or the last ``select_last`` steps, v6;
+                           default: the last
                            ``select_frac`` of the distinct steps, i.e. the later period; this mimics
                            deployment, where a policy is fitted on the past and used on the future)
       by: group         -> deterministic split by a group column (e.g. address), ``select_frac`` of
@@ -81,6 +82,11 @@ def split_protocol(val: pd.DataFrame, protocol: dict) -> tuple[pd.DataFrame, pd.
             raise DataError("protocol by: step needs a step column (or step_from_id: true)")
         steps = sorted(val["step"].unique())
         sel = protocol.get("select_steps")
+        if sel is None and protocol.get("select_last") is not None:   # v6: the last k steps, explicitly
+            k = int(protocol["select_last"])
+            if not 1 <= k < len(steps):
+                raise DataError(f"select_last {k} needs 1 <= k < {len(steps)} distinct steps")
+            sel = steps[-k:]
         if sel is None:
             k = max(1, int(round(len(steps) * frac)))
             if k >= len(steps):

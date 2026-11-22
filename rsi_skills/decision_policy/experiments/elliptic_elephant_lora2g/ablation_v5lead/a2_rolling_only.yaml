@@ -1,0 +1,3 @@
+name: a2_rolling_only
+note: "v5 lead's rolling refit alone (baseline threshold refitted on all labelled history, labels 1 step late)"
+refit: {mode: rolling, delay: 1, window: null}
