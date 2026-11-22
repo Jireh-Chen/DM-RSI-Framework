@@ -5,7 +5,7 @@ import argparse
 import json
 import sys
 
-from dpolicy.evolve import Run, consensus, evolve, final_test, protocol_warnings, read_yaml, write_report, write_yaml
+from dpolicy.evolve import Run, consensus, evolve, family_consensus, final_test, protocol_warnings, read_yaml, write_report, write_yaml
 from dpolicy.policy import normalize, spec_hash
 
 
@@ -100,6 +100,16 @@ def main(argv=None) -> int:
         if best:
             write_yaml(run.out / "consensus.yaml", best["spec"])
             print(f"consensus pick written to {run.out / 'consensus.yaml'}")
+        print("policy families of the replicates' accepted incumbents (v7):")
+        fams = family_consensus(runs)
+        for e in fams:
+            b = e["best"]
+            print(f"  {e['family']:36s} {len(e['runs'])}/{len(runs)} replicates{'  CONSENSUS' if e['consensus'] else ''}; "
+                  f"representative {b['hash']} from {b['run']} gain {float(b['vs_incumbent']['diff']):+.4f}")
+        fam = next((e for e in fams if e["consensus"]), None)
+        if fam:
+            write_yaml(run.out / "family_consensus.yaml", {**fam["best"]["spec"], "name": f"family:{fam['family']}"})
+            print(f"family consensus representative written to {run.out / 'family_consensus.yaml'}")
     elif args.cmd == "final-test":
         inc, base = run.incumbent(), read_yaml(run.out / "baseline.yaml")
         pols = {"baseline": base, "incumbent": inc}
