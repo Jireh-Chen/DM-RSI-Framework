@@ -42,7 +42,7 @@ DEFAULT_SPACE = {
 
 
 # With data.features_path the second stage can see information the score does not have; on logit(p) alone it is a
-# monotone re-map of the same score and cannot change the ranking. These variants join the space only then (v2).
+# monotone re-map of the same score and cannot change the ranking. These variants join the space only then (1.2).
 FEATURE_SPACE = {
     "second_stage": [{"enabled": True, "model": "hgb", "apply_to": "all", "features": "all"},
                      {"enabled": True, "model": "logreg", "apply_to": "all", "features": "all"}],
@@ -55,7 +55,7 @@ def search_space(run) -> dict:
     ev = run.cfg.get("evolve", {})
     space = copy.deepcopy(ev.get("search_space") or DEFAULT_SPACE)
     if run.features is not None and ev.get("feature_space", True):
-        bags = int(ev.get("second_stage_bags", 1))   # v3: bagged feature second stages in the auto space
+        bags = int(ev.get("second_stage_bags", 1))   # 1.3: bagged feature second stages in the auto space
         for k, opts in FEATURE_SPACE.items():
             opts = copy.deepcopy(opts)
             for o in opts:
@@ -182,7 +182,7 @@ class Run:
                "spec": spec, "metrics": m, "objective": objective(m, self.obj),
                "fits": fits if len(fits) <= 3 else fits[:1] + [f"... {len(fits) - 1} more per-step fits"]}
         if incumbent_dec is not None:
-            # same decisions as the incumbent on every select row: a no-op, whatever its spec says (v2)
+            # same decisions as the incumbent on every select row: a no-op, whatever its spec says (1.2)
             rec["noop"] = bool(np.array_equal(obj_decisions(dec, self.obj), obj_decisions(incumbent_dec, self.obj)))
             steps = dec["step"].to_numpy() if "step" in dec.columns else None
             rec["vs_incumbent"] = paired_diff(dec.y.to_numpy(), obj_decisions(dec, self.obj), obj_decisions(incumbent_dec, self.obj),
@@ -270,8 +270,8 @@ def mutate(spec: dict, space: dict, rng: random.Random, tries: int = 20) -> dict
 
 
 def mutate_continuous(spec: dict, rng: random.Random, features: bool) -> dict | None:
-    """v5: one numeric change drawn from a range instead of a fixed list, so the search does not run dry when the
-    incumbent stays put (v1-v4 stopped after 5-10 rounds whatever `iterations` said)."""
+    """1.5: one numeric change drawn from a range instead of a fixed list, so the search does not run dry when the
+    incumbent stays put (1.1-1.4 stopped after 5-10 rounds whatever `iterations` said)."""
     base = normalize(spec)
     ss, ab, dec, rf = base["second_stage"], base["abstain"], base["decision"], base["refit"]
     ops = ["band"]
@@ -311,7 +311,7 @@ def mutate_continuous(spec: dict, rng: random.Random, features: bool) -> dict | 
 
 
 def parents(run: Run, inc: dict, k: int) -> list[dict]:
-    """v5: the incumbent plus the k-1 best other candidates so far (finite objective, not a no-op), best first."""
+    """1.5: the incumbent plus the k-1 best other candidates so far (finite objective, not a no-op), best first."""
     out, seen = [inc], {spec_hash(run.prepare(inc))}
     for r in sorted(run.archive(), key=lambda r: -num(r["objective"])):
         if len(out) >= k:
@@ -328,7 +328,7 @@ def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
     space = search_space(run)
     rng = random.Random(run.seed)
     ev = run.cfg.get("evolve", {})
-    k_par, cont = int(ev.get("parents", 1)), bool(ev.get("continuous", False))   # v5; defaults = v4 behaviour
+    k_par, cont = int(ev.get("parents", 1)), bool(ev.get("continuous", False))   # 1.5; defaults = 1.4 behaviour
     min_lo = float(run.accept.get("min_lo", 0.0))
     seen = {r["hash"] for r in run.archive()}
     start = max([r["iteration"] for r in run.archive()] + [0])
@@ -353,7 +353,7 @@ def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
         pars = parents(run, inc, k_par) if k_par > 1 else [inc]
         for _ in range(auto):
             if k_par == 1 and not cont:
-                m = mutate(inc, space, rng)          # v1-v4 path: same random draws, same archive
+                m = mutate(inc, space, rng)          # 1.1-1.4 path: same random draws, same archive
             else:
                 par = pars[rng.randrange(len(pars))]
                 m = (mutate_continuous(par, rng, run.features is not None) if cont and rng.random() < 0.5
@@ -396,7 +396,7 @@ def evolve(run: Run, *, iterations: int, auto: int, log=print) -> list[dict]:
 
 STEP_CV_WARNING = ("protocol by: step_cv refits every policy on all earlier steps for each fold, so a static policy is "
                    "compared as if it were refit every step, while final-test fits it once; rolling and static refits "
-                   "cannot be told apart. For a deployment-faithful comparison use by: step with select_last (v6).")
+                   "cannot be told apart. For a deployment-faithful comparison use by: step with select_last (1.6).")
 
 
 def protocol_warnings(run) -> list[str]:
@@ -404,7 +404,7 @@ def protocol_warnings(run) -> list[str]:
 
 
 def consensus(runs: list, min_share: float = 0.5) -> list[dict]:
-    """v6: one row per candidate (by hash) evaluated in several replicate runs of the same set-up (different seeds):
+    """1.6: one row per candidate (by hash) evaluated in several replicate runs of the same set-up (different seeds):
     in how many it passed the acceptance rule, and its mean gain. A candidate that passes in > min_share of the
     replicates is a *consensus* pick; a single seed's pass is not enough when seeds alone move F1 by ~0.005."""
     by = {}
@@ -426,7 +426,7 @@ def consensus(runs: list, min_share: float = 0.5) -> list[dict]:
 
 
 def family(spec: dict) -> str:
-    """v7: the structure of a policy without its tuned numbers, e.g. "band+hgb[feat]/max_f1/static". Replicates and
+    """1.7: the structure of a policy without its tuned numbers, e.g. "band+hgb[feat]/max_f1/static". Replicates and
     models agree on the family long before they agree on exact values (coverage 0.80 vs 0.946 are the same idea)."""
     s = normalize(spec)
     ss, ab = s["second_stage"], s["abstain"]
@@ -441,7 +441,7 @@ def family(spec: dict) -> str:
 
 
 def family_consensus(runs: list, min_share: float = 0.5) -> list[dict]:
-    """v7: per policy family, in how many replicates the *accepted incumbent* belongs to it. A family held by more than
+    """1.7: per policy family, in how many replicates the *accepted incumbent* belongs to it. A family held by more than
     min_share of the replicates is the consensus; its representative is the replicate incumbent with the largest
     accepted gain (each replicate's incumbent already passed the acceptance rule on its own)."""
     fams = {}

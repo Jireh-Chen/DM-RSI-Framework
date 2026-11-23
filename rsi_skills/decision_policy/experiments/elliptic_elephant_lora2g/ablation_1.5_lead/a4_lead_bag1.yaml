@@ -1,0 +1,5 @@
+name: a4_lead_bag1
+note: "1.5 lead with a single seed (bags 1): how much of it is the bagging"
+abstain: {coverage: 0.9}
+second_stage: {enabled: true, model: hgb, apply_to: band, features: all, bags: 1}
+refit: {mode: rolling, delay: 1, window: null}

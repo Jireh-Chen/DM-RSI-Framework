@@ -36,8 +36,8 @@ def matrix(ids, p_cal, features: pd.DataFrame | None) -> np.ndarray:
 
 
 class SecondStage:
-    """``bags`` > 1 (v3): average ``bags`` models and ``bags`` out-of-fold passes, each with its own seed and fold
-    split. One model's decisions moved F1 by ~0.006 between seeds on Elliptic select rows (v2 replicates), as much as
+    """``bags`` > 1 (1.3): average ``bags`` models and ``bags`` out-of-fold passes, each with its own seed and fold
+    split. One model's decisions moved F1 by ~0.006 between seeds on Elliptic select rows (1.2 replicates), as much as
     the gain being measured; averaging makes the second stage a property of the data, not of the seed."""
 
     def __init__(self, model: str = "logreg", rule: str = "max_f1", seed: int = 0, bags: int = 1, **rule_kw):

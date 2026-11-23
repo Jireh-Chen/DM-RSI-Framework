@@ -20,8 +20,8 @@ second_stage:
   enabled: false
   model: logreg                  # logreg | hgb（HistGradientBoosting）
   apply_to: band                 # band：只重判拒判带（需要 abstain.coverage < 1）；all：重判全部行
-  features: []                   # 运行配置 data.features_path 里的列名；为空时只用 logit(p_cal)；v2 起可写 all（全部数值列）
-  bags: 1                        # v3 起：k > 1 时用 k 个种子各做 5 折 OOF 再平均选阈值，预测时平均 k 个模型（降低种子方差）
+  features: []                   # 运行配置 data.features_path 里的列名；为空时只用 logit(p_cal)；1.2 起可写 all（全部数值列）
+  bags: 1                        # 1.3 起：k > 1 时用 k 个种子各做 5 折 OOF 再平均选阈值，预测时平均 k 个模型（降低种子方差）
   rule: max_f1                   # 二次判断自己的阈值规则，在 5 折 out-of-fold 预测上选定
 refit:
   mode: static                   # static | rolling
@@ -31,7 +31,7 @@ refit:
 
 拟合顺序：先校准，再在校准后的分数上选阈值，然后定拒判带，最后在 fit 行上拟合二次判断。apply 时按同样的顺序执行。decision 取值：1 判正，0 判负，-1 拒判（defer）。
 
-运行配置里和搜索空间相关的键（v2 起）：`evolve.feature_space`（默认 true：有 `data.features_path` 时把特征二次判断加入自动变异空间）、
-`evolve.second_stage_bags`（v3 起，默认 1：自动空间里特征二次判断用几个种子平均）。
+运行配置里和搜索空间相关的键（1.2 起）：`evolve.feature_space`（默认 true：有 `data.features_path` 时把特征二次判断加入自动变异空间）、
+`evolve.second_stage_bags`（1.3 起，默认 1：自动空间里特征二次判断用几个种子平均）。
 
 候选去重按配置的 hash（`name`、`parent`、`note` 不计入 hash），同一个策略不会被评估两次。

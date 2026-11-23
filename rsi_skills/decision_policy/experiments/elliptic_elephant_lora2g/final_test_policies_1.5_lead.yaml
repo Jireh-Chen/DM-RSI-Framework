@@ -1,0 +1,23 @@
+name: v5_lead_b535ed93e99a
+calibration:
+  method: none
+decision:
+  rule: max_f1
+abstain:
+  coverage: 0.9
+second_stage:
+  enabled: true
+  model: hgb
+  apply_to: band
+  features: all
+  rule: max_f1
+  bags: 9
+refit:
+  mode: rolling
+  delay: 1
+  window: null
+note: '1.2 showed this candidate moves 0.005-0.006 between seeds (as much as its gain);
+  bag 5 seeds. under-confident band p in [0.1,0.5) holds many positives: defer the
+  10% of rows nearest the cut and let hgb with features re-decide them; the first
+  stage keeps the confident 90%'
+parent: 1e359473deb9

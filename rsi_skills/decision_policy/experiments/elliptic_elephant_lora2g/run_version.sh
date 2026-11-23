@@ -1,8 +1,8 @@
 #!/bin/bash
 # Run one Skill version's replicates in parallel (CPU only), each with that version's own code:
-#   bash run_version.sh v3            # replicates 0 1 2
-#   bash run_version.sh v4 1          # replicate 1 only
-# v1-v3 run from ../../history/v<N>/dpolicy, v4 (current) from ../../dpolicy: PYTHONPATH picks the package, the
+#   bash run_version.sh 1.3            # replicates 0 1 2
+#   bash run_version.sh 1.4 1          # replicate 1 only
+# 1.1-1.3 run from ../../history/1.<N>/dpolicy, 1.4 (current) from ../../dpolicy: PYTHONPATH picks the package, the
 # installed dpolicy is not used. For each replicate: dpolicy init (if new) -> copy proposals_<v>/ -> dpolicy evolve,
 # timed into <out>/evolve_seconds.txt.
 # 4 BLAS/OpenMP threads each: on a loaded shared box, sklearn's HistGradientBoosting with all cores oversubscribes
@@ -10,7 +10,7 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 SKILL=$(cd "$HERE/../.." && pwd)
-V=${1:?version, e.g. v4}; shift
+V=${1:?version, e.g. 1.4}; shift
 REPS=${*:-0 1 2}
 PY=${DPOLICY_PY:-/shared/ssd/yile/dmrsi/dpolicy-venv/bin/python}
 if [ -d "$SKILL/history/$V/dpolicy" ]; then CODE=$SKILL/history/$V; else CODE=$SKILL; fi

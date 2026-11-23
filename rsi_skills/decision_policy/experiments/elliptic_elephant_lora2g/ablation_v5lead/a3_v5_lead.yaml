@@ -1,5 +1,0 @@
-name: a3_v5_lead
-note: "the full v5 lead (b535ed93e99a)"
-abstain: {coverage: 0.9}
-second_stage: {enabled: true, model: hgb, apply_to: band, features: all, bags: 9}
-refit: {mode: rolling, delay: 1, window: null}

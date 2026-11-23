@@ -1,4 +1,4 @@
-# Ablation of the v5 lead on val (protocol step_cv), seed 1; dpolicy eval, no test.
+# Ablation of the 1.5 lead on val (protocol step_cv), seed 1; dpolicy eval, no test.
 # Replicates differ only in evolve.seed (auto mutations, second-stage seed); same start, same proposals.
 run_name: el_lora2g_ablation_step_cv_r1
 out_dir: /shared/ssd/yile/dmrsi/rsi/ablation/step_cv_r1
@@ -9,7 +9,7 @@ data:
   test_split: test
   step_from_id: false
   features_path: /shared/ssd/yile/dmrsi/features/addr_txhist_policy_features.parquet   # pipelines/elliptic_elephant/04_policy_features.py
-protocol: {by: step_cv, cv_steps: 3}   # v4: steps 32, 33, 34 each scored by a policy fitted on earlier steps
+protocol: {by: step_cv, cv_steps: 3}   # 1.4: steps 32, 33, 34 each scored by a policy fitted on earlier steps
 objective: {metric: f1_e2e, min_coverage: 0.0}
 final_metric: f1_e2e
 costs: {fp: 1.0, fn: 10.0, defer: 0.5}

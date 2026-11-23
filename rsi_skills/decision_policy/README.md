@@ -4,24 +4,30 @@
 
 模型训练好并打完分以后，这个模块自进化它的**决策策略**：校准、阈值、拒判、二次判断、滚动重拟合。不改模型，也不重新训练。
 
-**推荐版本：Skill v3（`dpolicy` 3.0.0）**，在 test 上唯一显著优于 baseline。仓库里的 `dpolicy/` 是最新的 v4（v3 的超集，加了时间外 step CV），
-不写 `by: step_cv` 时和 v3 的行为完全相同。 各版本的功能、实现策略、更新内容和实验结果见 [`VERSIONS.md`](VERSIONS.md)；
+**推荐版本：Skill 1.6（`dpolicy` 1.6.0）**。仓库里的 `dpolicy/` 是最新的 1.7（1.6 的超集，多了按策略类别统计共识，不改变搜索和接受）。
+版本号说明：这个 Skill 单独演进的版本是 1.1–1.7（早先叫 v1–v7）；2.x 留给和其他 RSI 工作合并之后的版本。
+各版本的功能、实现策略、更新内容和实验结果见 [`VERSIONS.md`](VERSIONS.md)；
 历史版本的代码在 [`history/`](history/README.md)；团队成员把这个 Skill 集成进自己仓库的 Claude prompt 见 [`docs/INTEGRATION_PROMPT.md`](docs/INTEGRATION_PROMPT.md)。
 
-| 版本 | 新增 | Elliptic × elephant-1 LoRA 上 test 领先提案的收益 |
+| 版本 | 新增 | Elliptic × elephant-1 LoRA 上的 test 结果（相对 baseline 0.610） |
 |---|---|---|
-| v1 | 校准、阈值、拒判、logit 二次判断、rolling、bootstrap 接受规则 | −0.035 |
-| v2 | 二次判断用特征表；no-op 标记 | −0.023 |
-| **v3（推荐）** | 二次判断多种子平均（`bags`） | **+0.0086（显著）** |
-| v4 | 时间外 step CV 协议（`by: step_cv`） | −0.013 |
+| 1.1 | 校准、阈值、拒判、logit 二次判断、rolling、bootstrap 接受规则 | 领先提案 −0.035 |
+| 1.2 | 二次判断用特征表；no-op 标记 | 领先提案 −0.023 |
+| 1.3 | 二次判断多种子平均（`bags`） | 领先提案 +0.0086（显著） |
+| 1.4 | 时间外 step CV 协议（`by: step_cv`） | 领先提案 −0.013 |
+| 1.5 | 种群式搜索（`evolve.parents`、`evolve.continuous`） | 领先候选 +0.067（滚动，用延迟标签） |
+| **1.6（推荐）** | 部署一致的协议（`select_last`）、step_cv 警告、跨 seed 共识 | **共识 incumbent +0.091**（滚动，用延迟标签）；只用静态策略 +0.033 |
+| 1.7 | 按策略类别判断共识 | 第二个模型上类别共识 −0.020 |
 
-四个版本的 incumbent 都没变（baseline，test F1 0.610）：接受规则拦下了所有在 test 上变差的提案。
+1.1–1.5 的 incumbent 都没变（baseline，test F1 0.610）：接受规则拦下了所有在 test 上变差的提案。1.6 是第一个由 RSI 自己在 val 上接受新策略、
+并在 test 上显著提升的版本。**它的 +0.091 依赖滚动重拟合 + 延迟到达的标签**（每个 step 用晚 1 步到达的真实标签重拟合）；
+部署时拿不到延迟标签，就按静态策略的 +0.033 估计，并和团队自己的滚动方法（滚动重校准、滚动训练）在同一协议下比较。
 
-### 团队成员怎么集成（推荐 v3）
+### 团队成员怎么集成（推荐 1.6）
 
 已经有 onejev-harness 和 Elliptic benchmark 的话，只需要三步：
-1. 下载 [`releases/decision_policy_v3.zip`](releases/decision_policy_v3.zip)（各版本见 [`releases/`](releases/README.md)，约 56 KB），在你的仓库根目录解压；
-2. 把 [`docs/INTEGRATION_PROMPT.md`](docs/INTEGRATION_PROMPT.md) 里的 prompt 贴给 Claude Code，告诉它“我已解压 decision_policy_v3.zip”；
+1. 下载 [`releases/decision_policy_1.6.zip`](releases/decision_policy_1.6.zip)（各版本见 [`releases/`](releases/README.md)），在你的仓库根目录解压；
+2. 把 [`docs/INTEGRATION_PROMPT.md`](docs/INTEGRATION_PROMPT.md) 里的 prompt 贴给 Claude Code，告诉它“我已解压 decision_policy_1.6.zip”；
 3. 按它的提问确认分数位置、运行配置和 final-test 的批准。
 
 ## 安装
@@ -30,7 +36,7 @@
 cd rsi_skills/decision_policy
 python -m venv .venv && . .venv/bin/activate      # 也可以用 uv / conda；只需要 CPU
 pip install -e '.[dev]'
-pytest -q                                          # 22 个测试，约 10 秒
+pytest -q                                          # 25 个测试，约 20 秒
 ```
 
 ## 5 分钟跑通（合成数据）
@@ -103,7 +109,7 @@ dpolicy/bootstrap.py     按 step 分层的配对 bootstrap
 dpolicy/diagnose.py      失败诊断和 findings
 dpolicy/evolve.py        归档、变异、接受规则、报告、final-test
 dpolicy/cli.py           命令行
-history/v1..v3/dpolicy/  历史版本快照（PYTHONPATH=history/v<N> python -m dpolicy ...）
+history/1.1..1.6/dpolicy/  历史版本快照（PYTHONPATH=history/1.<N> python -P -m dpolicy ...）
 experiments/<实验>/      配置、提案、运行脚本、结果记录（run 输出本身不进 git）
 ```
 
