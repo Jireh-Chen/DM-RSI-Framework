@@ -285,7 +285,7 @@ def test_step_cv_scores_each_step_out_of_time(tmp_path, scores):
     assert (dec.set_index("id").decision == dec2.set_index("id").decision).all()
 
 
-def test_v5_population_search_runs_every_round(tmp_path, scores):
+def test_1_5_population_search_runs_every_round(tmp_path, scores):
     import random
     from dpolicy.evolve import mutate_continuous
     got = [mutate_continuous({"name": "b"}, random.Random(i), features=False) for i in range(20)]
@@ -295,18 +295,18 @@ def test_v5_population_search_runs_every_round(tmp_path, scores):
     pol.write_text(yaml.safe_dump({"name": "base"}))
     base = {"run_name": "t", "baseline": str(pol), "bootstrap": {"reps": 20},
             "data": {"scores_dir": str(scores), "name": "SYN", "step_from_id": True}}
-    for tag, ev in (("v4", {"iterations": 12, "auto_candidates": 3, "seed": 0}),
-                    ("v5", {"iterations": 12, "auto_candidates": 3, "seed": 0, "parents": 3, "continuous": True})):
+    for tag, ev in (("1.4", {"iterations": 12, "auto_candidates": 3, "seed": 0}),
+                    ("1.5", {"iterations": 12, "auto_candidates": 3, "seed": 0, "parents": 3, "continuous": True})):
         cfg = tmp_path / f"{tag}.yaml"
         cfg.write_text(yaml.safe_dump({**base, "out_dir": str(tmp_path / tag), "evolve": ev}))
         assert main(["init", str(cfg)]) == 0 and main(["evolve", str(cfg)]) == 0
     rounds = {tag: {json.loads(l)["iteration"] for l in (tmp_path / tag / "archive.jsonl").read_text().splitlines()} - {0}
-              for tag in ("v4", "v5")}
-    assert rounds["v5"] == set(range(1, 13))          # the population search never runs dry
-    assert len(rounds["v4"]) < 12                       # single-step mutations of a fixed incumbent do
+              for tag in ("1.4", "1.5")}
+    assert rounds["1.5"] == set(range(1, 13))          # the population search never runs dry
+    assert len(rounds["1.4"]) < 12                       # single-step mutations of a fixed incumbent do
 
 
-def test_v6_select_last_and_consensus(tmp_path, scores):
+def test_1_6_select_last_and_consensus(tmp_path, scores):
     from dpolicy.evolve import Run, consensus
     val = load_split(scores, "SYN", "val", step_from_id=True)
     steps = sorted(val.step.unique())
@@ -334,7 +334,7 @@ def test_v6_select_last_and_consensus(tmp_path, scores):
     assert protocol_warnings(Run(cv)) and not protocol_warnings(Run(cfgs[0]))
 
 
-def test_v7_family_ignores_tuned_numbers():
+def test_1_7_family_ignores_tuned_numbers():
     from dpolicy.evolve import family
     a = {"abstain": {"coverage": 0.8}, "second_stage": {"enabled": True, "model": "hgb", "features": "all"}}
     b = {"abstain": {"coverage": 0.946}, "second_stage": {"enabled": True, "model": "hgb", "features": "all", "bags": 3}}

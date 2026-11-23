@@ -1,4 +1,4 @@
-# Ablation of the v5 lead on val (protocol step), seed 2; dpolicy eval, no test.
+# Ablation of the 1.5 lead on val (protocol step), seed 2; dpolicy eval, no test.
 # Replicates differ only in evolve.seed (auto mutations, second-stage seed); same start, same proposals.
 run_name: el_lora2g_ablation_step_r2
 out_dir: /shared/ssd/yile/dmrsi/rsi/ablation/step_r2

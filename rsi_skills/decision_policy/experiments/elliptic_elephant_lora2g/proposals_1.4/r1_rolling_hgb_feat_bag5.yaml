@@ -1,0 +1,4 @@
+name: r1_rolling_hgb_feat_bag5
+note: "1.4: q1_hgb_feat_all_bag5 was the only policy that helped on test (+0.0086) but faded after step 43 (prevalence and threshold drift); refit it per step on all labelled history (labels 1 step late) so it follows the drift"
+second_stage: {enabled: true, model: hgb, apply_to: all, features: all, bags: 5}
+refit: {mode: rolling, delay: 1, window: null}

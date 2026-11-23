@@ -7,7 +7,7 @@ Decision Model RSI 团队的工作仓库：决策模型（elephant-1 等）在�
 | High-level controller | Borui, Junyi | （待定） | — |
 | Data | Bingqiao | `rsi_skills/data/` | 占位 |
 | Training（Architecture、HPs、Optimization） | CD | `rsi_skills/training/` | 占位 |
-| **Output（Model Head、Threshold、Post-Cut）** | **Yile** | [`rsi_skills/decision_policy/`](rsi_skills/decision_policy/README.md) | 推荐 **Skill v3**，最新 v4（版本见 [`VERSIONS.md`](rsi_skills/decision_policy/VERSIONS.md)），已在 Elliptic++ × elephant-1 LoRA 上做了 4 个版本 × 3 副本的实验 |
+| **Output（Model Head、Threshold、Post-Cut）** | **Yile** | [`rsi_skills/decision_policy/`](rsi_skills/decision_policy/README.md) | 推荐 **Skill 1.6**（test +0.091，依赖滚动重拟合 + 延迟标签；只用静态策略 +0.033），最新 1.7（版本 1.1–1.7 见 [`VERSIONS.md`](rsi_skills/decision_policy/VERSIONS.md)；2.x 留给和其他 RSI 工作合并后的版本），已在 Elliptic++ × elephant-1 LoRA 上做了 7 个版本的实验 |
 
 ## 结构
 
@@ -16,8 +16,8 @@ external/                          只读子模块，固定 commit，不修改�
   onejev-harness/                  Borui 的训练框架（BoruiXu/Decision-Model-Study@onejev-harness）
   crypto-fraud-detection/          Bingqiao 的 Elliptic++ 数据与 elephant 脚本（@crypto-fraud-detection-tasks）
 rsi_skills/
-  decision_policy/                 Decision Policy RSI：SKILL.md、README、VERSIONS.md（版本总览）、dpolicy/（当前 v4）、
-                                   history/（v1–v3 快照）、experiments/（实验配置与结果）、releases/（各版本最小集成 zip）、
+  decision_policy/                 Decision Policy RSI：SKILL.md、README、VERSIONS.md（版本总览）、dpolicy/（当前 1.7）、
+                                   history/（1.1–1.6 快照）、experiments/（实验配置与结果）、releases/（各版本最小集成 zip）、
                                    docs/INTEGRATION_PROMPT.md（团队集成用）
   data/  training/                 其他方向的占位
 pipelines/
@@ -35,7 +35,7 @@ cd DM-RSI-Framework/rsi_skills/decision_policy && pip install -e '.[dev]' && pyt
 
 - 服务器上跑通 baseline：[`pipelines/elliptic_elephant/README.md`](pipelines/elliptic_elephant/README.md)（含实测记录和共享 GPU 服务器的约定）
 - Decision Policy RSI 使用说明：[`rsi_skills/decision_policy/README.md`](rsi_skills/decision_policy/README.md)；版本与结果：[`VERSIONS.md`](rsi_skills/decision_policy/VERSIONS.md)
-- **团队成员集成 Decision Policy Skill（推荐 v3）**：下载 [`rsi_skills/decision_policy/releases/decision_policy_v3.zip`](rsi_skills/decision_policy/releases/README.md)，在自己仓库根目录解压，
+- **团队成员集成 Decision Policy Skill（推荐 1.6）**：下载 [`rsi_skills/decision_policy/releases/decision_policy_1.6.zip`](rsi_skills/decision_policy/releases/README.md)，在自己仓库根目录解压，
   再把 [`INTEGRATION_PROMPT.md`](rsi_skills/decision_policy/docs/INTEGRATION_PROMPT.md) 里的 prompt 交给自己的 Claude Code。各版本的区别见 [`VERSIONS.md`](rsi_skills/decision_policy/VERSIONS.md)
 
 ## 约定

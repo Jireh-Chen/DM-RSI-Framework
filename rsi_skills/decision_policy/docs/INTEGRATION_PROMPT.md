@@ -4,7 +4,7 @@
 **Elliptic++ benchmark**（@crypto-fraud-detection-tasks）开发的成员。用法：在你自己仓库的根目录打开 Claude Code，
 把下面“Prompt”一节整段贴给它。需要你本人决定或批准的地方，它会停下来问你。
 
-最简单的用法：从 `rsi_skills/decision_policy/releases/` 下载一个版本的 zip（**推荐 `decision_policy_v3.zip`**），在你的仓库根目录解压，
+最简单的用法：从 `rsi_skills/decision_policy/releases/` 下载一个版本的 zip（**推荐 `decision_policy_1.6.zip`**），在你的仓库根目录解压，
 再把下面的 prompt 贴给 Claude Code。zip 里只有你在已有 onejev-harness 和 benchmark 之外还需要的文件。
 
 集成后你得到：一个独立的 `rsi_skills/decision_policy/`（你选的那个版本的 `dpolicy`），一个 `.claude/skills/decision-policy-rsi` 链接，
@@ -16,9 +16,9 @@
 
 ```text
 请把 Yile 的 Decision Policy RSI Skill 集成进当前仓库。来源：https://github.com/Jireh-Chen/DM-RSI-Framework
-（目录 rsi_skills/decision_policy/，版本说明见该目录的 VERSIONS.md；推荐版本 v3，dpolicy 3.0.0）。
-如果我已经在仓库根目录解压了 decision_policy_v<N>.zip，以 zip 里的 INTEGRATE_decision_policy_v<N>.md 为准，
-第 2 步只核对文件是否到位、python -c "import dpolicy; print(dpolicy.__version__)" 是否等于 <N>.0.0，不要再从 GitHub 复制。
+（目录 rsi_skills/decision_policy/，版本说明见该目录的 VERSIONS.md；推荐版本 1.6，dpolicy 1.6.0）。
+如果我已经在仓库根目录解压了 decision_policy_1.<N>.zip，以 zip 里的 INTEGRATE_decision_policy_1.<N>.md 为准，
+第 2 步只核对文件是否到位、python -c "import dpolicy; print(dpolicy.__version__)" 是否等于 1.<N>.0，不要再从 GitHub 复制。
 
 背景：
 - 我们共用 onejev-harness 训练、Elliptic++ 作 benchmark。这个 Skill 只调整“模型分数 → 决策”这一层：
@@ -32,7 +32,7 @@
 
 1. 读源仓库的 rsi_skills/decision_policy/{README.md, SKILL.md, VERSIONS.md, reference/*.md} 和
    pipelines/elliptic_elephant/README.md（含实测记录和共享服务器约定），用 3–5 句话告诉我你理解的工作流程和规则。
-2. （没有 zip 时）从源仓库 rsi_skills/decision_policy/releases/ 取我指定版本的 zip（我没说就用 v3）解压到仓库根目录；
+2. （没有 zip 时）从源仓库 rsi_skills/decision_policy/releases/ 取我指定版本的 zip（我没说就用 1.6）解压到仓库根目录；
    或者把 rsi_skills/decision_policy/ 整个目录（含 dpolicy/、history/、tests/、configs/、reference/、docs/、
    SKILL.md、VERSIONS.md）复制到本仓库同名位置，并按 VERSIONS.md 换成指定版本的代码。不要复制 experiments/ 下 Yile 的服务器路径配置，
    只把 experiments/elliptic_elephant_lora2g/ 当作参考例子。如果本仓库已有同名目录，先停下来问我。
@@ -55,10 +55,12 @@
 5. （建议）生成二次判断用的特征表：python pipelines/elliptic_elephant/04_policy_features.py <rows 目录> <out.parquet>。
    特征只能来自模型的输入（state），不能含标签、地址字符串或绝对时间步。
 6. 从 rsi_skills/decision_policy/configs/elliptic_elephant.yaml 复制一份运行配置，填入 scores_dir、name、
-   features_path（如果有）。val 的 step 很少时用 protocol: {by: step_cv, cv_steps: 3}（v4）。
+   features_path（如果有）。协议用 protocol: {by: step, select_last: 2}（1.6，和 final-test 的部署方式一致）；不要用 by: step_cv，它会让滚动和静态策略分不出来。
+   多轮搜索用 evolve: {iterations: 10, second_stage_bags: 5, parents: 4, continuous: true}。
    先把配置给我看，objective、costs、accept 由我确认。不要为了让候选通过而修改这些键；要改就开新的 run_name。
 7. 按 SKILL.md 主流程跑：check → init → 读 diagnosis.md → 写 1–4 个带 note 的提案到 <out>/proposals/ → evolve。
-   每轮都重新读诊断、写提案，不要只靠自动变异。同一配置只改 evolve.seed 跑 3 个副本看稳定性。
+   每轮都重新读诊断、写提案，不要只靠自动变异。同一配置只改 evolve.seed 跑 3 个副本，再跑 python -m dpolicy consensus <cfg_r0> <cfg_r1> <cfg_r2>，
+   过半副本通过接受规则的候选才算数，final-test 测共识选择。
    汇报：每个副本的候选数、no-op 数、被接受数、领先提案的 F1 和 CI、耗时。
 8. final-test 读 test，每个 run 只能跑一次，必须先问我。在看 test 之前，把要测哪些策略
    （incumbent，以及可选的、标注为“未被接受”的领先提案）写进记录，再经我批准后运行：
@@ -82,6 +84,8 @@
   只需要重新打分出 `<name>_{val,test}.parquet`，再用新的运行配置跑这个 Skill；也可以用
   `final-test --policy <旧 incumbent.yaml>` 复验旧策略能否迁移到新模型。
 - **参考结果**（elephant-1 LoRA，2 卡，第 2640 步）：test 上 baseline F1 0.610，pre43 0.725，post43 0.426。
-  v1–v4 的领先提案在 test 上分别是 −0.035、−0.023、+0.0086、−0.013，详见 `VERSIONS.md`。你的全参模型的数字可以直接放在同一张表里对比。
+  1.1–1.4 的领先提案在 test 上分别是 −0.035、−0.023、+0.0086、−0.013；1.6 的共识 incumbent 是 0.701（+0.091），详见 `VERSIONS.md`。
+  **1.6 的 +0.091 依赖滚动重拟合 + 延迟到达的标签**（每个 step 用晚 1 步的真实标签重拟合）；只用静态策略时是 +0.033。
+  你部署时拿不到延迟标签，就按 +0.033 估计，并和团队自己的滚动方法在同一协议下比较。你的全参模型的数字可以直接放在同一张表里对比。
 - **常见坑**：LoRA 不合并就打分；sklearn 线程过度订阅（服务器 load 100+ 时一次 evolve 能从 20 秒拖到 15 分钟以上）；
   harness 的 finalize 被 GPU 看门狗杀掉（checkpoint 不受影响，用 02b + 03 脚本补打分即可）。

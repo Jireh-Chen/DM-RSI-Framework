@@ -1,8 +1,8 @@
 #!/bin/bash
 # Long validation: every version x 3 seeds x {10, 20} rounds, each with its own version's code (CPU only).
-#   tmux new -d -s dmrsi-long "bash run_long.sh"          # configs/long/v<N>_it<K>_r<R>.yaml
+#   tmux new -d -s dmrsi-long "bash run_long.sh"          # configs/long/1.<N>_it<K>_r<R>.yaml
 # At most $JOBS runs at a time (4 threads each), so a shared box is not swamped. Same proposals as the 3-round runs
-# (proposals_v<N>/, used in round 1); later rounds are the version's automatic search. Writes <out>/evolve_seconds.txt.
+# (proposals_1.<N>/, used in round 1); later rounds are the version's automatic search. Writes <out>/evolve_seconds.txt.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 SKILL=$(cd "$HERE/../.." && pwd)

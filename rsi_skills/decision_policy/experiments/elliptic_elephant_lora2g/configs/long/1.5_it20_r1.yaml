@@ -1,0 +1,19 @@
+# Long validation (20 rounds). Skill 1.5 (1.4 + population search: 4 parents, continuous mutations), replicate 1: Elephant-1 LoRA (2 GPU, step 2640) scores on Elliptic++ address txhist.
+# Replicates differ only in evolve.seed (auto mutations, second-stage seed); same start, same proposals.
+run_name: el_lora2g_long_v5_it20_r1
+out_dir: /shared/ssd/yile/dmrsi/rsi/long/v5_it20_r1
+data:
+  scores_dir: /shared/ssd/yile/dmrsi/scores
+  name: EL_lora2g_txhist_s0
+  val_split: val
+  test_split: test
+  step_from_id: false
+  features_path: /shared/ssd/yile/dmrsi/features/addr_txhist_policy_features.parquet   # pipelines/elliptic_elephant/04_policy_features.py
+protocol: {by: step_cv, cv_steps: 3}   # 1.4: steps 32, 33, 34 each scored by a policy fitted on earlier steps
+objective: {metric: f1_e2e, min_coverage: 0.0}
+final_metric: f1_e2e
+costs: {fp: 1.0, fn: 10.0, defer: 0.5}
+bootstrap: {reps: 1000, seed: 20261121, level: 0.95}
+accept: {min_lo: 0.0}
+baseline: ../../../../configs/policies/baseline_f1.yaml
+evolve: {iterations: 20, auto_candidates: 8, seed: 1, second_stage_bags: 5, parents: 4, continuous: true}

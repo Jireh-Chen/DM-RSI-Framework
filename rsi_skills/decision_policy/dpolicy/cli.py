@@ -43,7 +43,7 @@ def main(argv=None) -> int:
     a = sub.add_parser("report", help="rewrite report.md from the archive")
     a.add_argument("config")
 
-    a = sub.add_parser("consensus", help="v6: candidates across replicate runs (seeds): passes and mean gain")
+    a = sub.add_parser("consensus", help="1.6: candidates across replicate runs (seeds): passes and mean gain")
     a.add_argument("config")
     a.add_argument("more", nargs="+", help="the other replicates' configs")
     a.add_argument("--top", type=int, default=10)
@@ -100,7 +100,7 @@ def main(argv=None) -> int:
         if best:
             write_yaml(run.out / "consensus.yaml", best["spec"])
             print(f"consensus pick written to {run.out / 'consensus.yaml'}")
-        print("policy families of the replicates' accepted incumbents (v7):")
+        print("policy families of the replicates' accepted incumbents (1.7):")
         fams = family_consensus(runs)
         for e in fams:
             b = e["best"]

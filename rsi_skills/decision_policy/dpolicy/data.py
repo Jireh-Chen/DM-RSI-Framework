@@ -68,7 +68,7 @@ def split_protocol(val: pd.DataFrame, protocol: dict) -> tuple[pd.DataFrame, pd.
     *select* part (candidates are compared here).
 
     protocol:
-      by: step          -> select = rows whose step is in ``select_steps`` (or the last ``select_last`` steps, v6;
+      by: step          -> select = rows whose step is in ``select_steps`` (or the last ``select_last`` steps, 1.6;
                            default: the last
                            ``select_frac`` of the distinct steps, i.e. the later period; this mimics
                            deployment, where a policy is fitted on the past and used on the future)
@@ -82,7 +82,7 @@ def split_protocol(val: pd.DataFrame, protocol: dict) -> tuple[pd.DataFrame, pd.
             raise DataError("protocol by: step needs a step column (or step_from_id: true)")
         steps = sorted(val["step"].unique())
         sel = protocol.get("select_steps")
-        if sel is None and protocol.get("select_last") is not None:   # v6: the last k steps, explicitly
+        if sel is None and protocol.get("select_last") is not None:   # 1.6: the last k steps, explicitly
             k = int(protocol["select_last"])
             if not 1 <= k < len(steps):
                 raise DataError(f"select_last {k} needs 1 <= k < {len(steps)} distinct steps")
@@ -110,7 +110,7 @@ def split_protocol(val: pd.DataFrame, protocol: dict) -> tuple[pd.DataFrame, pd.
 
 
 def step_cv_folds(val: pd.DataFrame, protocol: dict) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
-    """protocol ``by: step_cv`` (v4): each of the last ``cv_steps`` val steps is scored by a policy fitted on all
+    """protocol ``by: step_cv`` (1.4): each of the last ``cv_steps`` val steps is scored by a policy fitted on all
     earlier steps only (expanding window, out of time). Pooling the folds lets candidates be compared on
     ``cv_steps`` steps instead of the 2 a 60/40 step split leaves on Elliptic val (30-34), with the same
     "fit on the past, use on the future" rule as ``by: step``."""

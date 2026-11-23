@@ -1,0 +1,4 @@
+name: q3_abstain97_hgb_feat_bag5
+note: "1.2 showed this candidate moves 0.005-0.006 between seeds (as much as its gain); bag 5 seeds. narrow variant of q2: only the 3% nearest the cut, where the first stage's errors concentrate (0.1-0.15 bin 48% positive)"
+abstain: {coverage: 0.97}
+second_stage: {enabled: true, model: hgb, apply_to: band, features: all, bags: 5}
